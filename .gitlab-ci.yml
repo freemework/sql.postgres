@@ -1,0 +1,19 @@
+include: 'http://dev.zxteam.net/pub/gitlab-pipelines/raw/v3/node/public-lib.yml'
+
+cache:
+  paths:
+    - node_modules/
+
+test-unit:
+  stage: test
+  image: node:11-alpine
+  dependencies:
+    - compile
+  variables:
+    GIT_STRATEGY: none
+    TEST_DB_URL: 'postgres://postgres:@postgres:5432/devdb'
+  services:
+    - name: zxteamorg/devel.postgres-10:20200914
+      alias: postgres
+  script:
+    - npm run test

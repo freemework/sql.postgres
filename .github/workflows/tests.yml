@@ -1,0 +1,46 @@
+name: Unit Tests
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: zxteamorg/devel.postgres-13:20210703
+        # options: >-
+        #   --health-cmd pg_isready
+        #   --health-interval 10s
+        #   --health-timeout 5s
+        #   --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      TEST_DB_URL: postgres://devadmin@localhost:5432/devdb
+
+    strategy:
+      matrix:
+        node-version: [12.x, 14.x, 15.x, 16.x, 18.x]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Up NodeJS
+        uses: actions/setup-node@v3
+        with:
+          node-version: "${{ matrix.node-version }}"
+
+      - name: Bump NPM to latest version
+        run: |
+          npm -g install npm
+
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Tests
+        run: |
+          npm test
