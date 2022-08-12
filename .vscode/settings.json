@@ -25,8 +25,7 @@
 		"node_modules": true,
 		"**/*.d.ts": true,
 		"**/*.js.map": true,
-		"**/*.js": true,
-		"package-lock.json": true
+		"**/*.js": true
 	},
 	"git.enabled": true,
 	"git.rebaseWhenSync": true,
