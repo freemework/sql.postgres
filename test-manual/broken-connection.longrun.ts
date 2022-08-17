@@ -11,9 +11,9 @@ import {
 	Fsleep, Fusing
 } from "@freemework/common";
 
-import { PostgresProviderFactory } from "../src";
+import { FSqlProviderFactoryPostgres } from "../src";
 
-function getOpts(): PostgresProviderFactory.Opts {
+function getOpts(): FSqlProviderFactoryPostgres.Opts {
 	function parseDbServerUrl(url: string): URL {
 		try {
 			return new URL(url);
@@ -49,7 +49,7 @@ function getOpts(): PostgresProviderFactory.Opts {
 (async function main() {
 	await Fusing(
 		FExecutionContext.Empty,
-		() => new PostgresProviderFactory(getOpts()),
+		() => new FSqlProviderFactoryPostgres(getOpts()),
 
 		async (cancellationToken, FSqlProviderFactory) => {
 			await FSqlProviderFactory.usingProvider(cancellationToken, async (FSqlProvider) => {

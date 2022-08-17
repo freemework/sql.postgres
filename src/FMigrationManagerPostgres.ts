@@ -5,12 +5,12 @@ import {
 
 import { FMigrationManager } from "@freemework/sql.misc.migration";
 
-import { PostgresProviderFactory } from "./PostgresProviderFactory";
+import { FSqlProviderFactoryPostgres } from "./FSqlProviderFactoryPostgres";
 
-export class PostgresMigrationManager extends FMigrationManager {
+export class FMigrationManagerPostgres extends FMigrationManager {
 	private readonly _schema: string;
 
-	public constructor(opts: PostgresMigrationManager.Opts) {
+	public constructor(opts: FMigrationManagerPostgres.Opts) {
 		super(opts);
 		this._schema = opts.sqlProviderFactory.defaultSchema;
 	}
@@ -112,9 +112,9 @@ export class PostgresMigrationManager extends FMigrationManager {
 	}
 }
 
-export namespace PostgresMigrationManager {
+export namespace FMigrationManagerPostgres {
 
 	export interface Opts extends FMigrationManager.Opts {
-		readonly sqlProviderFactory: PostgresProviderFactory;
+		readonly sqlProviderFactory: FSqlProviderFactoryPostgres;
 	}
 }

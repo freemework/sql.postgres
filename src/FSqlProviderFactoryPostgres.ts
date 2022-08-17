@@ -208,14 +208,14 @@ pg.types.setTypeParser(PostgresObjectID.timestamp as any, function (stringValue)
 });
 
 
-export class PostgresProviderFactory extends FInitableBase implements FSqlProviderFactory {
+export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlProviderFactory {
 	private readonly _log: FLogger;
 	private readonly _url: URL;
 	private readonly _pool: pg.Pool;
 	private readonly _defaultSchema: string;
 
 	// This implemenation wrap package https://www.npmjs.com/package/pg
-	public constructor(opts: PostgresProviderFactory.Opts) {
+	public constructor(opts: FSqlProviderFactoryPostgres.Opts) {
 		super();
 
 		switch (opts.url.protocol) {
@@ -330,7 +330,7 @@ export class PostgresProviderFactory extends FInitableBase implements FSqlProvid
 
 			await pgClient.query("SET TIME ZONE '00:00'");
 
-			const FSqlProvider: FSqlProvider = new PostgresFSqlProvider(
+			const FSqlProvider: FSqlProvider = new FSqlProviderPostgres(
 				pgClient,
 				async () => {
 					// dispose callback
@@ -419,7 +419,7 @@ export class PostgresProviderFactory extends FInitableBase implements FSqlProvid
 	}
 }
 
-export namespace PostgresProviderFactory {
+export namespace FSqlProviderFactoryPostgres {
 	export interface Opts {
 		readonly url: URL;
 		/**
@@ -463,7 +463,7 @@ export namespace PostgresProviderFactory {
 	}
 }
 
-class PostgresFSqlProvider extends FDisposableBase implements FSqlProvider {
+class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 	// public readonly dialect: SqlDialect = SqlDialect.PostgreSQL;
 	public readonly pgClient: pg.PoolClient;
 	public readonly log: FLogger;
@@ -476,17 +476,17 @@ class PostgresFSqlProvider extends FDisposableBase implements FSqlProvider {
 		this.log.trace("PostgresFSqlProvider constructed");
 	}
 
-	public statement(sql: string): PostgresSqlStatement {
+	public statement(sql: string): FSqlStatementPostgres {
 		super.verifyNotDisposed();
 		if (!sql) { throw new FExceptionArgument("sql"); }
 		this.log.trace("Statement: " + sql);
-		return new PostgresSqlStatement(this, sql);
+		return new FSqlStatementPostgres(this, sql);
 	}
 
 	public async createTempTable(
 		executionContext: FExecutionContext, tableName: string, columnsDefinitions: string
 	): Promise<FSqlTemporaryTable> {
-		const tempTable = new PostgresTempTable(this, executionContext, tableName, columnsDefinitions);
+		const tempTable = new FSqlTemporaryTablePostgres(this, executionContext, tableName, columnsDefinitions);
 		await tempTable.init(executionContext);
 		return tempTable;
 	}
@@ -496,11 +496,11 @@ class PostgresFSqlProvider extends FDisposableBase implements FSqlProvider {
 	}
 }
 
-class PostgresSqlStatement implements FSqlStatement {
+class FSqlStatementPostgres implements FSqlStatement {
 	private readonly _sqlText: string;
-	private readonly _owner: PostgresFSqlProvider;
+	private readonly _owner: FSqlProviderPostgres;
 
-	public constructor(owner: PostgresFSqlProvider, sql: string) {
+	public constructor(owner: FSqlProviderPostgres, sql: string) {
 		this._owner = owner;
 		this._sqlText = sql;
 	}
@@ -532,7 +532,7 @@ class PostgresSqlStatement implements FSqlStatement {
 		}
 
 		if (underlyingResultRows.length > 0 && !(underlyingResultFields[0].dataTypeID === PostgresObjectID.void)) {
-			return underlyingResultRows.map(row => new PostgresSqlResultRecord(row, underlyingResultFields));
+			return underlyingResultRows.map(row => new FSqlResultRecordPostgres(row, underlyingResultFields));
 		} else {
 			return [];
 		}
@@ -570,7 +570,7 @@ class PostgresSqlStatement implements FSqlStatement {
 				const queryFetchs = await helpers.executeRunQuery(executionContext, this._owner.pgClient, `FETCH ALL IN "${fetch}";`, []);
 				cancellationToken.throwIfCancellationRequested();
 
-				friendlyResult.push(queryFetchs.rows.map(row => new PostgresSqlResultRecord(row, queryFetchs.fields)));
+				friendlyResult.push(queryFetchs.rows.map(row => new FSqlResultRecordPostgres(row, queryFetchs.fields)));
 			}
 
 			// Executing: COMMIT
@@ -612,7 +612,7 @@ class PostgresSqlStatement implements FSqlStatement {
 		const value = underlyingFirstRow[Object.keys(underlyingFirstRow)[0]];
 		const fi = underlyingFields[0];
 		if (value !== undefined || fi !== undefined) {
-			return new PostgresData(value, fi);
+			return new FSqlDataPostgres(value, fi);
 		} else {
 			throw new FSqlException(`executeScalar: Bad argument ${value} and ${fi}`);
 		}
@@ -637,7 +637,7 @@ class PostgresSqlStatement implements FSqlStatement {
 			const value = underlyingFirstRow[Object.keys(underlyingFirstRow)[0]];
 			const fi = underlyingFields[0];
 			if (value !== undefined || fi !== undefined) {
-				return new PostgresData(value, fi);
+				return new FSqlDataPostgres(value, fi);
 			} else {
 				throw new FSqlException(`executeScalarOrNull: Bad argument ${value} and ${fi}`);
 			}
@@ -668,7 +668,7 @@ class PostgresSqlStatement implements FSqlStatement {
 		if (underlyingResultRows.length === 0) {
 			throw new FSqlExceptionNoSuchRecord(`executeSingle: No record for query ${this._sqlText}`);
 		} else if (underlyingResultRows.length === 1 && !(underlyingResultFields[0].dataTypeID === PostgresObjectID.void)) {
-			return new PostgresSqlResultRecord(underlyingResultRows[0], underlyingResultFields);
+			return new FSqlResultRecordPostgres(underlyingResultRows[0], underlyingResultFields);
 		} else {
 			throw new FExceptionInvalidOperation(`executeSingle: SQL query returns non-single result`);
 		}
@@ -698,22 +698,22 @@ class PostgresSqlStatement implements FSqlStatement {
 		if (underlyingResultRows.length === 0) {
 			return null;
 		} else if (underlyingResultRows.length === 1 && !(underlyingResultFields[0].dataTypeID === PostgresObjectID.void)) {
-			return new PostgresSqlResultRecord(underlyingResultRows[0], underlyingResultFields);
+			return new FSqlResultRecordPostgres(underlyingResultRows[0], underlyingResultFields);
 		} else {
 			throw new FExceptionInvalidOperation("executeSingleOrNull: SQL query returns non-single result");
 		}
 	}
 }
 
-namespace PostgresSqlResultRecord {
+namespace FSqlResultRecordPostgres {
 	export type NameMap = {
 		[name: string]: pg.FieldDef;
 	};
 }
-class PostgresSqlResultRecord implements FSqlResultRecord {
+class FSqlResultRecordPostgres implements FSqlResultRecord {
 	private readonly _fieldsData: any;
 	private readonly _fieldsInfo: Array<pg.FieldDef>;
-	private _nameMap?: PostgresSqlResultRecord.NameMap;
+	private _nameMap?: FSqlResultRecordPostgres.NameMap;
 
 	public constructor(fieldsData: any, fieldsInfo: Array<pg.FieldDef>) {
 		if (Object.keys(fieldsData).length !== fieldsInfo.length) {
@@ -733,9 +733,9 @@ class PostgresSqlResultRecord implements FSqlResultRecord {
 		}
 	}
 
-	private get nameMap(): PostgresSqlResultRecord.NameMap {
+	private get nameMap(): FSqlResultRecordPostgres.NameMap {
 		if (this._nameMap === undefined) {
-			const nameMap: PostgresSqlResultRecord.NameMap = {};
+			const nameMap: FSqlResultRecordPostgres.NameMap = {};
 			const total = this._fieldsInfo.length;
 			for (let index = 0; index < total; ++index) {
 				const fi: pg.FieldDef = this._fieldsInfo[index];
@@ -753,7 +753,7 @@ class PostgresSqlResultRecord implements FSqlResultRecord {
 			throw new FExceptionArgument(`PostgresSqlResultRecord does not have field with index '${index}'`, "index");
 		}
 		const value: any = this._fieldsData[fi.name];
-		return new PostgresData(value, fi);
+		return new FSqlDataPostgres(value, fi);
 	}
 	private getByName(name: string): FSqlData {
 		const fi = this.nameMap[name];
@@ -761,18 +761,18 @@ class PostgresSqlResultRecord implements FSqlResultRecord {
 			throw new FExceptionArgument(`PostgresSqlResultRecord does not have field with name '${name}'`, "name");
 		}
 		const value: any = this._fieldsData[fi.name];
-		return new PostgresData(value, fi);
+		return new FSqlDataPostgres(value, fi);
 	}
 }
 
-class PostgresTempTable extends FInitableBase implements FSqlTemporaryTable {
+class FSqlTemporaryTablePostgres extends FInitableBase implements FSqlTemporaryTable {
 
-	private readonly _owner: PostgresFSqlProvider;
+	private readonly _owner: FSqlProviderPostgres;
 	private readonly _executionContext: FExecutionContext;
 	private readonly _tableName: string;
 	private readonly _columnsDefinitions: string;
 
-	public constructor(owner: PostgresFSqlProvider, executionContext: FExecutionContext, tableName: string, columnsDefinitions: string) {
+	public constructor(owner: FSqlProviderPostgres, executionContext: FExecutionContext, tableName: string, columnsDefinitions: string) {
 		super();
 		this._owner = owner;
 		this._executionContext = executionContext;
@@ -807,7 +807,7 @@ class PostgresTempTable extends FInitableBase implements FSqlTemporaryTable {
 	}
 }
 
-class PostgresData implements FSqlData {
+class FSqlDataPostgres implements FSqlData {
 	private readonly _postgresValue: any;
 	private readonly _fi: pg.FieldDef;
 
@@ -1003,24 +1003,6 @@ class PostgresData implements FSqlData {
 		return message;
 	}
 }
-
-// const DUMMY_LOGGER: FLogger = Object.freeze({
-// 	get isTraceEnabled(): boolean { return false; },
-// 	get isDebugEnabled(): boolean { return false; },
-// 	get isInfoEnabled(): boolean { return false; },
-// 	get isWarnEnabled(): boolean { return false; },
-// 	get isErrorEnabled(): boolean { return false; },
-// 	get isFatalEnabled(): boolean { return false; },
-
-// 	trace(message: string, ...args: any[]): void { /* NOP */ },
-// 	debug(message: string, ...args: any[]): void { /* NOP */ },
-// 	info(message: string, ...args: any[]): void { /* NOP */ },
-// 	warn(message: string, ...args: any[]): void { /* NOP */ },
-// 	error(message: string, ...args: any[]): void { /* NOP */ },
-// 	fatal(message: string, ...args: any[]): void { /* NOP */ },
-
-// 	getLogger(...args: any): FLogger { /* NOP */ return DUMMY_LOGGER; }
-// });
 
 namespace helpers {
 	export function openDatabase(url: URL): Promise<pg.Client> {

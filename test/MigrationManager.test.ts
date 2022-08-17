@@ -6,7 +6,7 @@ import { assert } from "chai";
 import { PendingSuiteFunction, Suite, SuiteFunction } from "mocha";
 import * as path from "path";
 
-import { PostgresMigrationManager, PostgresProviderFactory } from "../src";
+import { FMigrationManagerPostgres, FSqlProviderFactoryPostgres } from "../src";
 
 const { myDescribe, TEST_DB_URL } = (function (): {
 	myDescribe: PendingSuiteFunction | SuiteFunction;
@@ -61,7 +61,7 @@ myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: S
 	it("Migrate to latest version (omit targetVersion)", async () => {
 		const log = FLogger.None.getLogger(this.title);
 
-		const sqlProviderFactory = new PostgresProviderFactory({
+		const sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, log
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
@@ -71,7 +71,7 @@ myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: S
 				path.normalize(path.join(__dirname, "..", "test.files", "MigrationManager_1"))
 			);
 
-			const manager = new PostgresMigrationManager({
+			const manager = new FMigrationManagerPostgres({
 				migrationSources, sqlProviderFactory, log
 			});
 

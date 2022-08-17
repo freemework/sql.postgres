@@ -1,2 +1,2 @@
-export { PostgresMigrationManager } from "./PostgresMigrationManager";
-export { PostgresProviderFactory } from "./PostgresProviderFactory";
+export { FMigrationManagerPostgres } from "./FMigrationManagerPostgres";
+export { FSqlProviderFactoryPostgres } from "./FSqlProviderFactoryPostgres";

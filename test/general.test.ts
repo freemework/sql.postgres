@@ -17,7 +17,7 @@ import * as chai from "chai";
 import { PendingSuiteFunction, Suite, SuiteFunction } from "mocha";
 import * as path from "path";
 
-import { PostgresProviderFactory, PostgresMigrationManager } from "../src";
+import { FMigrationManagerPostgres, FSqlProviderFactoryPostgres } from "../src";
 
 declare global {
 	namespace Chai {
@@ -88,7 +88,7 @@ const { myDescribe, TEST_DB_URL } = (function (): {
 const timestamp = Date.now();
 
 myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () {
-	let sqlProviderFactory: PostgresProviderFactory;
+	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 	let sqlProvider: FSqlProvider | null = null;
 
 	function getFSqlProvider(): FSqlProvider {
@@ -102,7 +102,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 		FDecimal.configure(new FDecimalBackendBigNumber(22, FDecimal.RoundMode.Ceil));
 
-		sqlProviderFactory = new PostgresProviderFactory({
+		sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!),
 			defaultSchema: `general_test_1_${timestamp}`,
 			log
@@ -114,7 +114,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new PostgresMigrationManager({
+			const manager = new FMigrationManagerPostgres({
 				migrationSources, sqlProviderFactory, log
 			});
 
@@ -736,14 +736,14 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 
 myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestamp})`, function () {
-	let sqlProviderFactory: PostgresProviderFactory;
+	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
 		const log = FLogger.None.getLogger(`general_test_2_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
-		sqlProviderFactory = new PostgresProviderFactory({
+		sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_2_${timestamp}`, log
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
@@ -753,7 +753,7 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new PostgresMigrationManager({
+			const manager = new FMigrationManagerPostgres({
 				migrationSources, sqlProviderFactory, log
 			});
 
@@ -784,14 +784,14 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 
 
 myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_test_3_${timestamp})`, function () {
-	let sqlProviderFactory: PostgresProviderFactory;
+	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
 		const log = FLogger.None.getLogger(`general_test_3_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
-		sqlProviderFactory = new PostgresProviderFactory({
+		sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_3_${timestamp}`, log
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
@@ -801,7 +801,7 @@ myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_te
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new PostgresMigrationManager({
+			const manager = new FMigrationManagerPostgres({
 				migrationSources, sqlProviderFactory, log
 			});
 
