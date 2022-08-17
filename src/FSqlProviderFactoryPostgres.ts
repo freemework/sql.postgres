@@ -399,8 +399,8 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	}
 
 
-	protected onInit(executionContext: FExecutionContext): void | Promise<void> {
-		//
+	protected onInit(executionContext: FExecutionContext): void {
+		// NOP
 	}
 
 	protected async onDispose(): Promise<void> {
@@ -424,7 +424,7 @@ export namespace FSqlProviderFactoryPostgres {
 		readonly url: URL;
 		/**
 		 * Default schema. The value overrides an URL param "schema".
-		 * @description Each pgClient will execute SQL statement: `SET search_path TO ${defaultSchema}` before wrapping in `PostgresFSqlProvider`
+		 * @description Each pgClient will execute SQL statement: `SET search_path TO ${defaultSchema}` before wrapping in `FSqlProviderPostgres`
 		 * @default "public"
 		 */
 		readonly defaultSchema?: string;
@@ -464,7 +464,6 @@ export namespace FSqlProviderFactoryPostgres {
 }
 
 class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
-	// public readonly dialect: SqlDialect = SqlDialect.PostgreSQL;
 	public readonly pgClient: pg.PoolClient;
 	public readonly log: FLogger;
 	private readonly _disposer: () => Promise<void>;
@@ -473,13 +472,15 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 		this.pgClient = pgClient;
 		this._disposer = disposer;
 		this.log = log;
-		this.log.trace("PostgresFSqlProvider constructed");
+		this.log.trace("FSqlProviderPostgres constructed");
 	}
 
 	public statement(sql: string): FSqlStatementPostgres {
 		super.verifyNotDisposed();
 		if (!sql) { throw new FExceptionArgument("sql"); }
-		this.log.trace("Statement: " + sql);
+		if (this.log.isTraceEnabled) {
+			this.log.trace("FSqlProviderPostgres Statement: " + sql);
+		}
 		return new FSqlStatementPostgres(this, sql);
 	}
 
@@ -492,7 +493,9 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 	}
 
 	protected async onDispose(): Promise<void> {
+		this.log.trace("FSqlProviderPostgres disposing...");
 		await this._disposer();
+		this.log.trace("FSqlProviderPostgres disposed");
 	}
 }
 
