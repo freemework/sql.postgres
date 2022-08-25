@@ -484,20 +484,24 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 		this.log.trace("FSqlProviderPostgres constructed");
 	}
 
-	public statement(sql: string): FSqlStatementPostgres {
+	public statement(sqlText: string): FSqlStatementPostgres {
 		super.verifyNotDisposed();
-		if (!sql) { throw new FExceptionArgument("sql"); }
+		if (!sqlText) { throw new FExceptionArgument("sql"); }
 		if (this.log.isTraceEnabled) {
-			this.log.trace("FSqlProviderPostgres Statement: " + sql);
+			const trimmedSqlText: string = helpers.trimSqlTextForException(sqlText);
+			this.log.trace("FSqlProviderPostgres Statement: " + trimmedSqlText);
 		}
-		return new FSqlStatementPostgres(this, sql);
+		return new FSqlStatementPostgres(this, sqlText);
 	}
 
 	public async createTempTable(
 		executionContext: FExecutionContext, tableName: string, columnsDefinitions: string
 	): Promise<FSqlTemporaryTable> {
+		const myExecutionContext: FExecutionContext = new FExecutionContextLogger(executionContext, this.log);
+		const log: FLogger = FExecutionContextLogger.of(myExecutionContext).logger;
+
 		const tempTable = new FSqlTemporaryTablePostgres(this, executionContext, tableName, columnsDefinitions);
-		await tempTable.init(executionContext);
+		await tempTable.init(myExecutionContext);
 		return tempTable;
 	}
 
@@ -512,9 +516,9 @@ class FSqlStatementPostgres implements FSqlStatement {
 	private readonly _sqlText: string;
 	private readonly _owner: FSqlProviderPostgres;
 
-	public constructor(owner: FSqlProviderPostgres, sql: string) {
+	public constructor(owner: FSqlProviderPostgres, sqlText: string) {
 		this._owner = owner;
-		this._sqlText = sql;
+		this._sqlText = sqlText;
 	}
 
 	public async execute(executionContext: FExecutionContext, ...values: Array<FSqlStatementParam>): Promise<void> {
