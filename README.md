@@ -53,5 +53,5 @@ docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish
 #### Start + run tests
 
 ```bash
-docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish 5432:5432 --detach zxteamorg/devel.postgres-13:20210703; npm test
+docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish 5432:5432 --detach zxteamorg/devel.postgres-13:20210703; npm run test:only
 ```

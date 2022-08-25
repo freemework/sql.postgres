@@ -1,14 +1,19 @@
 import {
-	FInitableBase,
-	FSqlProvider,
-	FExecutionContext,
-	FLogger,
+	FCancellationToken,
 	FDisposableBase,
-	FSqlTemporaryTable,
-	FSqlStatementParam,
+	FExceptionAggregate,
+	FExceptionArgument,
 	FExceptionCancelled,
-	FSqlData,
 	FExceptionInvalidOperation,
+	FExecutionContext,
+	FExecutionContextCancellation,
+	FExecutionContextLogger,
+	FInitableBase,
+	FLogger,
+	FSqlProvider,
+	FSqlStatementParam,
+	FSqlTemporaryTable,
+	FSqlData,
 	FDecimal,
 	FSqlExceptionConstraint,
 	FSqlExceptionPermission,
@@ -18,10 +23,6 @@ import {
 	FSqlResultRecord,
 	FSqlStatement,
 	FSqlExceptionNoSuchRecord,
-	FExceptionAggregate,
-	FCancellationToken,
-	FExecutionContextCancellation,
-	FExceptionArgument,
 	FSqlProviderFactory
 } from "@freemework/common";
 
@@ -209,7 +210,6 @@ pg.types.setTypeParser(PostgresObjectID.timestamp as any, function (stringValue)
 
 
 export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlProviderFactory {
-	private readonly _log: FLogger;
 	private readonly _url: URL;
 	private readonly _pool: pg.Pool;
 	private readonly _defaultSchema: string;
@@ -217,6 +217,8 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	// This implemenation wrap package https://www.npmjs.com/package/pg
 	public constructor(opts: FSqlProviderFactoryPostgres.Opts) {
 		super();
+
+		const constructorLogger: FLogger = opts.constructorLogger !== undefined ? opts.constructorLogger : FLogger.None;
 
 		switch (opts.url.protocol) {
 			case "postgres:":
@@ -227,8 +229,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				throw new FExceptionArgument("Expected URL schema 'postgres:' or 'postgres+ssl:'.", "opts.url");
 		}
 
-		this._log = opts.log !== undefined ? opts.log : FLogger.None;
-		this._log.trace("PostgresProviderPoolFactory constructed");
+		constructorLogger.trace("PostgresProviderPoolFactory constructed");
 
 		const poolConfig: pg.PoolConfig = { host: this._url.hostname };
 
@@ -271,27 +272,27 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				if (opts.ssl !== undefined) {
 					if (opts.ssl === "prefer") {
 						poolConfig.ssl.rejectUnauthorized = false;
-						this._log.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+						constructorLogger.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 					} else {
 						poolConfig.ssl.rejectUnauthorized = true;
-						this._log.debug("Using full secured connection (with certificate validation).");
+						constructorLogger.debug("Using full secured connection (with certificate validation).");
 						if (opts.ssl.caCert !== undefined) {
 							poolConfig.ssl.ca = opts.ssl.caCert;
-							this._log.debug("CA certificate was provided.");
+							constructorLogger.debug("CA certificate was provided.");
 						}
 						if (opts.ssl.clientCert !== undefined) {
 							poolConfig.ssl.cert = opts.ssl.clientCert.cert;
 							poolConfig.ssl.key = opts.ssl.clientCert.key;
-							this._log.debug("Client certificate was provided.");
+							constructorLogger.debug("Client certificate was provided.");
 						}
 					}
 				}
 			} else {
 				poolConfig.ssl.rejectUnauthorized = false;
-				this._log.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+				constructorLogger.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 			}
 		} else {
-			this._log.debug("Using insecured connection (non-SSL).");
+			constructorLogger.debug("Using insecured connection (non-SSL).");
 		}
 
 		this._pool = new pg.Pool(poolConfig);
@@ -308,8 +309,8 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				error handler in case you want to inspect it.
 			 */
 			const ex: FException = FException.wrapIfNeeded(e);
-			this._log.debug(ex.message);
-			this._log.trace(ex.message, ex);
+			constructorLogger.debug(ex.message);
+			constructorLogger.trace(ex.message, ex);
 		});
 	}
 
@@ -319,6 +320,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 		this.verifyInitializedAndNotDisposed();
 
 		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
+		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
 
 		const pgClient = await this._pool.connect();
 		try {
@@ -336,7 +338,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 					// dispose callback
 					pgClient.release();
 				},
-				this._log
+				logger
 			);
 
 			return FSqlProvider;
@@ -399,22 +401,29 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	}
 
 
-	protected onInit(executionContext: FExecutionContext): void {
-		// NOP
+	protected onInit(): void {
+		const logger: FLogger = FExecutionContextLogger.of(this.initExecutionContext).logger;
+		if (logger.isTraceEnabled) {
+			logger.trace(`Initializing instance of ${this.constructor.name} ...`);
+		}
 	}
 
 	protected async onDispose(): Promise<void> {
+		const logger: FLogger = FExecutionContextLogger.of(this.initExecutionContext).logger;
+		if (logger.isTraceEnabled) {
+			logger.trace(`Disposing instance of ${this.constructor.name} ...`);
+		}
 		// Dispose never raise error
 		try {
 			await this._pool.end();
 		} catch (e) {
 			const ex: FException = FException.wrapIfNeeded(e);
-			if (this._log.isWarnEnabled) {
-				this._log.warn("Module 'pg' ends pool with error. " + ex.message);
+			if (logger.isWarnEnabled) {
+				logger.warn("Module 'pg' ends pool with error. " + ex.message);
 			} else {
 				console.error("Module 'pg' ends pool with error", e);
 			}
-			this._log.debug("Module 'pg' ends pool with error", ex);
+			logger.debug("Module 'pg' ends pool with error", ex);
 		}
 	}
 }
@@ -433,7 +442,7 @@ export namespace FSqlProviderFactoryPostgres {
 		 * The value ovverides an URL param "app"
 		 */
 		readonly applicationName?: string;
-		readonly log?: FLogger;
+		readonly constructorLogger?: FLogger;
 		/**
 		 * @default 5000
 		 */
@@ -562,7 +571,8 @@ class FSqlStatementPostgres implements FSqlStatement {
 			// Verify that this is a multi-request
 			if (resultFetchs.fields[0].dataTypeID !== PostgresObjectID.refcursor) {
 				// This is not a multi request. Raise exception.
-				throw new FExceptionInvalidOperation(`executeQueryMultiSets: cannot execute this script: ${this._sqlText}`);
+				const trimmedSqlText: string = helpers.trimSqlTextForException(this._sqlText);
+				throw new FExceptionInvalidOperation(`executeQueryMultiSets: cannot execute this script: ${trimmedSqlText}`);
 			}
 
 			const resultFetchsValue = helpers.parsingValue(resultFetchs);
@@ -598,7 +608,8 @@ class FSqlStatementPostgres implements FSqlStatement {
 
 		const underlyingRows = underlyingResult.rows;
 		if (underlyingRows.length === 0) {
-			throw new FSqlExceptionNoSuchRecord(`executeScalar: No record for query ${this._sqlText}`);
+			const trimmedSqlText: string = helpers.trimSqlTextForException(this._sqlText);
+			throw new FSqlExceptionNoSuchRecord(`executeScalar: No record for query ${trimmedSqlText}`);
 		}
 
 		const underlyingFields = underlyingResult.fields;
@@ -669,7 +680,8 @@ class FSqlStatementPostgres implements FSqlStatement {
 		}
 
 		if (underlyingResultRows.length === 0) {
-			throw new FSqlExceptionNoSuchRecord(`executeSingle: No record for query ${this._sqlText}`);
+			const trimmedSqlText: string = helpers.trimSqlTextForException(this._sqlText);
+			throw new FSqlExceptionNoSuchRecord(`executeSingle: No record for query ${trimmedSqlText}`);
 		} else if (underlyingResultRows.length === 1 && !(underlyingResultFields[0].dataTypeID === PostgresObjectID.void)) {
 			return new FSqlResultRecordPostgres(underlyingResultRows[0], underlyingResultFields);
 		} else {
@@ -1049,6 +1061,8 @@ namespace helpers {
 		} catch (reason: any) {
 			const err = FException.wrapIfNeeded(reason);
 
+			const trimmedSqlText: string = trimSqlTextForException(sqlText);
+
 			if ("code" in reason) {
 				const code = reason.code;
 				// https://www.postgresql.org/docs/12/errcodes-appendix.html
@@ -1066,18 +1080,18 @@ namespace helpers {
 					case "42000":
 					case "44000":
 						throw new FSqlExceptionConstraint(
-							`SQL Constraint restriction happened. Query: ${sqlText}. Reason Message: ${err.message}. See innerError for details.`,
+							`SQL Constraint restriction happened. Query: ${trimmedSqlText}. Reason Message: ${err.message}. See innerError for details.`,
 							_.isString(reason.constraint) ? reason.constraint : "???",
 							err
 						);
 					case "42501":
-						throw new FSqlExceptionPermission(`Insufficient permission to execute a query. Query: ${sqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
+						throw new FSqlExceptionPermission(`Insufficient permission to execute a query. Query: ${trimmedSqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
 					case "42000":
 					case "42601":
-						throw new FSqlExceptionSyntax(`Looks like wrong SQL syntax detected. Query: ${sqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
+						throw new FSqlExceptionSyntax(`Looks like wrong SQL syntax detected. Query: ${trimmedSqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
 				}
 			}
-			throw new FSqlException(`Unexpected error occurs while executing a query. Query: ${sqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
+			throw new FSqlException(`Unexpected error occurs while executing a query. Query: ${trimmedSqlText}. Reason Message: ${err.message}. See innerError for details.`, err);
 		}
 	}
 	export function statementArgumentsAdapter(args: Array<FSqlStatementParam>): Array<any> {
@@ -1101,5 +1115,10 @@ namespace helpers {
 		const rows = res.rows;
 		return rows.map((row) => row[Object.keys(row)[0]]);
 	}
-
+	export function trimSqlTextForException(sqlText: string): string {
+		const trimmedSqlText: string = sqlText.length > 996
+			? sqlText.substring(0, 996) + " ..."
+			: sqlText;
+		return trimmedSqlText;
+	}
 }

@@ -24,12 +24,12 @@ function getOpts() {
                 const port = 5432;
                 const user = "devuser";
                 const postgresUrl = new URL(`postgres://${user}@${host}:${port}/devdb`);
-                return { url: postgresUrl, log: common_1.FLogger.None };
+                return { url: postgresUrl };
             }
         }
         const url = parseDbServerUrl(urlStr);
         switch (url.protocol) {
-            case "postgres:": return { url, log: common_1.FLogger.None };
+            case "postgres:": return { url };
             default:
                 throw new Error(`Not supported DB Server protocol = ${process.env.TEST_DB_URL}`);
         }

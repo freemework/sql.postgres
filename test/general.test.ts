@@ -98,14 +98,14 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 
 	before(async function () {
-		const log = FLogger.None.getLogger(`general_test_1_${timestamp}`);
+		const constructorLogger = FLogger.None.getLogger(`general_test_1_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(22, FDecimal.RoundMode.Ceil));
 
 		sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!),
 			defaultSchema: `general_test_1_${timestamp}`,
-			log
+			constructorLogger
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
 		try {
@@ -115,7 +115,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 			);
 
 			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory, log
+				migrationSources, sqlProviderFactory
 			});
 
 			await manager.install(FExecutionContext.None);
@@ -739,12 +739,12 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
-		const log = FLogger.None.getLogger(`general_test_2_${timestamp}`);
+		const constructorLogger = FLogger.None.getLogger(`general_test_2_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
 		sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_2_${timestamp}`, log
+			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_2_${timestamp}`, constructorLogger
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
 		try {
@@ -754,7 +754,7 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 			);
 
 			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory, log
+				migrationSources, sqlProviderFactory
 			});
 
 			await manager.install(FExecutionContext.None);
@@ -787,12 +787,12 @@ myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_te
 	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
-		const log = FLogger.None.getLogger(`general_test_3_${timestamp}`);
+		const constructorLogger = FLogger.None.getLogger(`general_test_3_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
 		sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_3_${timestamp}`, log
+			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_3_${timestamp}`, constructorLogger
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
 		try {
@@ -802,7 +802,7 @@ myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_te
 			);
 
 			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory, log
+				migrationSources, sqlProviderFactory
 			});
 
 			await manager.install(FExecutionContext.None);

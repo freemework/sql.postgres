@@ -59,10 +59,10 @@ myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: S
 
 
 	it("Migrate to latest version (omit targetVersion)", async () => {
-		const log = FLogger.None.getLogger(this.title);
+		const constructorLogger = FLogger.None.getLogger(this.title);
 
 		const sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, log
+			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, constructorLogger
 		});
 		await sqlProviderFactory.init(FExecutionContext.None);
 		try {
@@ -72,7 +72,7 @@ myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: S
 			);
 
 			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory, log
+				migrationSources, sqlProviderFactory
 			});
 
 			await manager.install(FExecutionContext.None);

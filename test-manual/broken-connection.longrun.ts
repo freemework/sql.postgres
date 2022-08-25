@@ -31,13 +31,13 @@ function getOpts(): FSqlProviderFactoryPostgres.Opts {
 				const port = 5432;
 				const user = "devuser";
 				const postgresUrl = new URL(`postgres://${user}@${host}:${port}/devdb`);
-				return { url: postgresUrl, log: FLogger.None };
+				return { url: postgresUrl };
 			}
 		}
 
 		const url = parseDbServerUrl(urlStr);
 		switch (url.protocol) {
-			case "postgres:": return { url, log: FLogger.None };
+			case "postgres:": return { url };
 			default:
 				throw new Error(`Not supported DB Server protocol = ${process.env.TEST_DB_URL}`);
 		}
