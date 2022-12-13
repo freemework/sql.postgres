@@ -1,4 +1,4 @@
-import { FDecimal, FExecutionContext, FLogger } from "@freemework/common";
+import { FDecimal, FExecutionContext, FLoggerLegacy } from "@freemework/common";
 import { FDecimalBackendBigNumber } from "@freemework/decimal.bignumberjs";
 import { FMigrationSources } from "@freemework/sql.misc.migration";
 
@@ -59,7 +59,7 @@ myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: S
 
 
 	it("Migrate to latest version (omit targetVersion)", async () => {
-		const constructorLogger = FLogger.None.getLogger(this.title);
+		const constructorLogger = FLoggerLegacy.None.getLogger(this.title);
 
 		const sqlProviderFactory = new FSqlProviderFactoryPostgres({
 			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, constructorLogger

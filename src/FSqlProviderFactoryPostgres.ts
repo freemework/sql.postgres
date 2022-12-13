@@ -7,9 +7,9 @@ import {
 	FExceptionInvalidOperation,
 	FExecutionContext,
 	FExecutionContextCancellation,
-	FExecutionContextLogger,
+	FExecutionContextLoggerLegacy,
 	FInitableBase,
-	FLogger,
+	FLoggerLegacy,
 	FSqlProvider,
 	FSqlStatementParam,
 	FSqlTemporaryTable,
@@ -214,11 +214,11 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	private readonly _pool: pg.Pool;
 	private readonly _defaultSchema: string;
 
-	// This implemenation wrap package https://www.npmjs.com/package/pg
+	// This implementation wrap package https://www.npmjs.com/package/pg
 	public constructor(opts: FSqlProviderFactoryPostgres.Opts) {
 		super();
 
-		const constructorLogger: FLogger = opts.constructorLogger !== undefined ? opts.constructorLogger : FLogger.None;
+		const constructorLogger: FLoggerLegacy = opts.constructorLogger !== undefined ? opts.constructorLogger : FLoggerLegacy.None;
 
 		switch (opts.url.protocol) {
 			case "postgres:":
@@ -292,7 +292,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				constructorLogger.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 			}
 		} else {
-			constructorLogger.debug("Using insecured connection (non-SSL).");
+			constructorLogger.debug("Using unsecured connection (non-SSL).");
 		}
 
 		this._pool = new pg.Pool(poolConfig);
@@ -320,7 +320,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 		this.verifyInitializedAndNotDisposed();
 
 		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
-		const logger: FLogger = FExecutionContextLogger.of(executionContext).logger;
+		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
 
 		const pgClient = await this._pool.connect();
 		try {
@@ -350,7 +350,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 
 	public usingProvider<T>(
 		executionContext: FExecutionContext,
-		worker: (sqlProvder: FSqlProvider) => T | Promise<T>
+		worker: (sqlProvider: FSqlProvider) => T | Promise<T>
 	): Promise<T> {
 		const executionPromise: Promise<T> = (async () => {
 			const FSqlProvider: FSqlProvider = await this.create(executionContext);
@@ -365,10 +365,10 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	}
 
 	public usingProviderWithTransaction<T>(
-		executionContext: FExecutionContext, worker: (sqlProvder: FSqlProvider) => T | Promise<T>
+		executionContext: FExecutionContext, worker: (sqlProvider: FSqlProvider) => T | Promise<T>
 	): Promise<T> {
 		return this.usingProvider(executionContext, async (FSqlProvider: FSqlProvider) => {
-			const uncancellableExecutionConxtext: FExecutionContext = new FExecutionContextCancellation(
+			const uncancellableExecutionContext: FExecutionContext = new FExecutionContextCancellation(
 				executionContext,
 				FCancellationToken.None
 			);
@@ -382,13 +382,13 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				} else {
 					result = workerResult;
 				}
-				// We have not to cancel this operation, so pass uncancellableExecutionConxtext
-				await FSqlProvider.statement("COMMIT TRANSACTION").execute(uncancellableExecutionConxtext);
+				// We have not to cancel this operation, so pass uncancellableExecutionContext
+				await FSqlProvider.statement("COMMIT TRANSACTION").execute(uncancellableExecutionContext);
 				return result;
 			} catch (e) {
 				try {
-					// We have not to cancel this operation, so pass uncancellableExecutionConxtext
-					await FSqlProvider.statement("ROLLBACK TRANSACTION").execute(uncancellableExecutionConxtext);
+					// We have not to cancel this operation, so pass uncancellableExecutionContext
+					await FSqlProvider.statement("ROLLBACK TRANSACTION").execute(uncancellableExecutionContext);
 				} catch (e2) {
 					throw new FExceptionAggregate([
 						FException.wrapIfNeeded(e),
@@ -402,14 +402,14 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 
 
 	protected onInit(): void {
-		const logger: FLogger = FExecutionContextLogger.of(this.initExecutionContext).logger;
+		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(this.initExecutionContext).logger;
 		if (logger.isTraceEnabled) {
 			logger.trace(`Initializing instance of ${this.constructor.name} ...`);
 		}
 	}
 
 	protected async onDispose(): Promise<void> {
-		const logger: FLogger = FExecutionContextLogger.of(this.initExecutionContext).logger;
+		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(this.initExecutionContext).logger;
 		if (logger.isTraceEnabled) {
 			logger.trace(`Disposing instance of ${this.constructor.name} ...`);
 		}
@@ -438,11 +438,11 @@ export namespace FSqlProviderFactoryPostgres {
 		 */
 		readonly defaultSchema?: string;
 		/**
-		 * Application name. Used by Postres in monitoring stuff.
-		 * The value ovverides an URL param "app"
+		 * Application name. Used by Postgres in monitoring stuff.
+		 * The value overrides an URL param "app"
 		 */
 		readonly applicationName?: string;
-		readonly constructorLogger?: FLogger;
+		readonly constructorLogger?: FLoggerLegacy;
 		/**
 		 * @default 5000
 		 */
@@ -474,9 +474,9 @@ export namespace FSqlProviderFactoryPostgres {
 
 class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 	public readonly pgClient: pg.PoolClient;
-	public readonly log: FLogger;
+	public readonly log: FLoggerLegacy;
 	private readonly _disposer: () => Promise<void>;
-	public constructor(pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLogger) {
+	public constructor(pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLoggerLegacy) {
 		super();
 		this.pgClient = pgClient;
 		this._disposer = disposer;
@@ -497,8 +497,8 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 	public async createTempTable(
 		executionContext: FExecutionContext, tableName: string, columnsDefinitions: string
 	): Promise<FSqlTemporaryTable> {
-		const myExecutionContext: FExecutionContext = new FExecutionContextLogger(executionContext, this.log);
-		const log: FLogger = FExecutionContextLogger.of(myExecutionContext).logger;
+		const myExecutionContext: FExecutionContext = new FExecutionContextLoggerLegacy(executionContext, this.log);
+		const log: FLoggerLegacy = FExecutionContextLoggerLegacy.of(myExecutionContext).logger;
 
 		const tempTable = new FSqlTemporaryTablePostgres(this, executionContext, tableName, columnsDefinitions);
 		await tempTable.init(myExecutionContext);
@@ -930,10 +930,10 @@ class FSqlDataPostgres implements FSqlData {
 		if (this._postgresValue === null) {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asDate"));
 			// } else if (this._fi.dataTypeID === PostgresObjectID.timestamp && this._postgresValue instanceof Date) {
-			// 	// `pg` library make Date with local zone shift, so we need to make oposite changes to retrieve correct date from UTC timestamp
+			// 	// `pg` library make Date with local zone shift, so we need to make opposite changes to retrieve correct date from UTC timestamp
 			// 	return new Date(this._postgresValue.getTime() - this._postgresValue.getTimezoneOffset() * 60000);
 		} else if (this._fi.dataTypeID === PostgresObjectID.timestamp && typeof this._postgresValue === "string") {
-			// `pg` library make Date with local zone shift, so we need to make oposite changes to retrieve correct date from UTC timestamp
+			// `pg` library make Date with local zone shift, so we need to make opposite changes to retrieve correct date from UTC timestamp
 			return new Date(`${this._postgresValue}+0000`);
 		} else {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage(
@@ -946,10 +946,10 @@ class FSqlDataPostgres implements FSqlData {
 		if (this._postgresValue === null) {
 			return null;
 			// } else if (this._fi.dataTypeID === PostgresObjectID.timestamp && this._postgresValue instanceof Date) {
-			// 	// `pg` library make Date with local zone shift, so we need to make oposite changes to retrieve correct date from UTC timestamp
+			// 	// `pg` library make Date with local zone shift, so we need to make opposite changes to retrieve correct date from UTC timestamp
 			// 	return new Date(this._postgresValue.getTime() - this._postgresValue.getTimezoneOffset() * 60000);
 		} else if (this._fi.dataTypeID === PostgresObjectID.timestamp && typeof this._postgresValue === "string") {
-			// `pg` library make Date with local zone shift, so we need to make oposite changes to retrieve correct date from UTC timestamp
+			// `pg` library make Date with local zone shift, so we need to make opposite changes to retrieve correct date from UTC timestamp
 			return new Date(`${this._postgresValue}+0000`);
 		} else {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage(
@@ -1106,7 +1106,7 @@ namespace helpers {
 						return value.toString(); // FDecimal should be converted to string
 					} else if (value instanceof Date) {
 						throw new FExceptionInvalidOperation("You trying to pass date object as statement parameter. Right now this is not supported (long story)... As workaround you have to pass date object as unix milliseconds by calling .getTime() and use 'to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE' to decode unix milliseconds to Postgres timestamp.");
-						// // `pg` library make Date with local zone shift, so we need to make oposite changes to save correct date as UTC timestamp
+						// // `pg` library make Date with local zone shift, so we need to make opposite changes to save correct date as UTC timestamp
 						// THIS IS WORK INCORRECT FOR DATE (in time switch period): 2021-03-28T01:24:59.741Z
 						// return new Date(value.getTime() + value.getTimezoneOffset() * 60000);
 					}

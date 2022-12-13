@@ -1,9 +1,8 @@
 import {
 	FDecimal,
-	FDecimalBackendNumber,
 	FExceptionInvalidOperation,
 	FExecutionContext,
-	FLogger,
+	FLoggerLegacy,
 	FSqlException,
 	FSqlExceptionConstraint,
 	FSqlExceptionSyntax,
@@ -98,7 +97,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 
 	before(async function () {
-		const constructorLogger = FLogger.None.getLogger(`general_test_1_${timestamp}`);
+		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_1_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(22, FDecimal.RoundMode.Ceil));
 
@@ -739,7 +738,7 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
-		const constructorLogger = FLogger.None.getLogger(`general_test_2_${timestamp}`);
+		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_2_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
@@ -787,7 +786,7 @@ myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_te
 	let sqlProviderFactory: FSqlProviderFactoryPostgres;
 
 	before(async function () {
-		const constructorLogger = FLogger.None.getLogger(`general_test_3_${timestamp}`);
+		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_3_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
