@@ -3,14 +3,11 @@ import {
 	FDisposableBase,
 	FExceptionAggregate,
 	FExceptionArgument,
-	FExceptionCancelled,
 	FExceptionInvalidOperation,
 	FExecutionContext,
-	FExecutionContextCancellation,
-	FExecutionContextLoggerLegacy,
 	FInitableBase,
-	FLoggerLegacy,
-	FSqlProvider,
+	FLogger,
+	FSqlConnection,
 	FSqlStatementParam,
 	FSqlTemporaryTable,
 	FSqlData,
@@ -23,7 +20,11 @@ import {
 	FSqlResultRecord,
 	FSqlStatement,
 	FSqlExceptionNoSuchRecord,
-	FSqlProviderFactory
+	FSqlConnectionFactory,
+	FCancellationExecutionContext,
+	FLoggerLabels,
+	FLoggerLabelsExecutionContext,
+	FCancellationException
 } from "@freemework/common";
 
 import * as _ from "lodash";
@@ -209,16 +210,18 @@ pg.types.setTypeParser(PostgresObjectID.timestamp as any, function (stringValue)
 });
 
 
-export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlProviderFactory {
+export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSqlConnectionFactory {
 	private readonly _url: URL;
 	private readonly _pool: pg.Pool;
 	private readonly _defaultSchema: string;
+	private readonly _log: FLogger;
 
 	// This implementation wrap package https://www.npmjs.com/package/pg
-	public constructor(opts: FSqlProviderFactoryPostgres.Opts) {
+	public constructor(opts: FSqlConnectionFactoryPostgres.Opts) {
 		super();
 
-		const constructorLogger: FLoggerLegacy = opts.constructorLogger !== undefined ? opts.constructorLogger : FLoggerLegacy.None;
+		this._log = opts.log !== undefined ? opts.log : FLogger.create(this.constructor.name);
+		let constructorLoggerLabels: FLoggerLabels = {};
 
 		switch (opts.url.protocol) {
 			case "postgres:":
@@ -229,7 +232,7 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				throw new FExceptionArgument("Expected URL schema 'postgres:' or 'postgres+ssl:'.", "opts.url");
 		}
 
-		constructorLogger.trace("PostgresProviderPoolFactory constructed");
+		this._log.trace(constructorLoggerLabels, "PostgresProviderPoolFactory constructed");
 
 		const poolConfig: pg.PoolConfig = { host: this._url.hostname };
 
@@ -272,27 +275,27 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				if (opts.ssl !== undefined) {
 					if (opts.ssl === "prefer") {
 						poolConfig.ssl.rejectUnauthorized = false;
-						constructorLogger.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+						this._log.debug(constructorLoggerLabels, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 					} else {
 						poolConfig.ssl.rejectUnauthorized = true;
-						constructorLogger.debug("Using full secured connection (with certificate validation).");
+						this._log.debug(constructorLoggerLabels, "Using full secured connection (with certificate validation).");
 						if (opts.ssl.caCert !== undefined) {
 							poolConfig.ssl.ca = opts.ssl.caCert;
-							constructorLogger.debug("CA certificate was provided.");
+							this._log.debug(constructorLoggerLabels, "CA certificate was provided.");
 						}
 						if (opts.ssl.clientCert !== undefined) {
 							poolConfig.ssl.cert = opts.ssl.clientCert.cert;
 							poolConfig.ssl.key = opts.ssl.clientCert.key;
-							constructorLogger.debug("Client certificate was provided.");
+							this._log.debug(constructorLoggerLabels, "Client certificate was provided.");
 						}
 					}
 				}
 			} else {
 				poolConfig.ssl.rejectUnauthorized = false;
-				constructorLogger.debug("Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+				this._log.debug(constructorLoggerLabels, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 			}
 		} else {
-			constructorLogger.debug("Using unsecured connection (non-SSL).");
+			this._log.debug(constructorLoggerLabels, "Using unsecured connection (non-SSL).");
 		}
 
 		this._pool = new pg.Pool(poolConfig);
@@ -309,18 +312,17 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 				error handler in case you want to inspect it.
 			 */
 			const ex: FException = FException.wrapIfNeeded(e);
-			constructorLogger.debug(ex.message);
-			constructorLogger.trace(ex.message, ex);
+			this._log.debug(constructorLoggerLabels, ex.message);
+			this._log.trace(constructorLoggerLabels, ex.message, ex);
 		});
 	}
 
 	public get defaultSchema(): string { return this._defaultSchema; }
 
-	public async create(executionContext: FExecutionContext): Promise<FSqlProvider> {
+	public async create(executionContext: FExecutionContext): Promise<FSqlConnection> {
 		this.verifyInitializedAndNotDisposed();
 
-		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
-		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(executionContext).logger;
+		const cancellationToken: FCancellationToken = FCancellationExecutionContext.of(executionContext).cancellationToken;
 
 		const pgClient = await this._pool.connect();
 		try {
@@ -332,16 +334,16 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 
 			await pgClient.query("SET TIME ZONE '00:00'");
 
-			const FSqlProvider: FSqlProvider = new FSqlProviderPostgres(
+			const FSqlConnection: FSqlConnection = new FSqlConnectionPostgres(
 				pgClient,
 				async () => {
 					// dispose callback
 					pgClient.release();
 				},
-				logger
+				this._log
 			);
 
-			return FSqlProvider;
+			return FSqlConnection;
 		} catch (e) {
 			pgClient.release();
 			throw e;
@@ -350,14 +352,14 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 
 	public usingProvider<T>(
 		executionContext: FExecutionContext,
-		worker: (sqlProvider: FSqlProvider) => T | Promise<T>
+		worker: (sqlProvider: FSqlConnection) => T | Promise<T>
 	): Promise<T> {
 		const executionPromise: Promise<T> = (async () => {
-			const FSqlProvider: FSqlProvider = await this.create(executionContext);
+			const FSqlConnection: FSqlConnection = await this.create(executionContext);
 			try {
-				return await worker(FSqlProvider);
+				return await worker(FSqlConnection);
 			} finally {
-				await FSqlProvider.dispose();
+				await FSqlConnection.dispose();
 			}
 		})();
 
@@ -365,30 +367,30 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 	}
 
 	public usingProviderWithTransaction<T>(
-		executionContext: FExecutionContext, worker: (sqlProvider: FSqlProvider) => T | Promise<T>
+		executionContext: FExecutionContext, worker: (sqlProvider: FSqlConnection) => T | Promise<T>
 	): Promise<T> {
-		return this.usingProvider(executionContext, async (FSqlProvider: FSqlProvider) => {
-			const uncancellableExecutionContext: FExecutionContext = new FExecutionContextCancellation(
+		return this.usingProvider(executionContext, async (FSqlConnection: FSqlConnection) => {
+			const uncancellableExecutionContext: FExecutionContext = new FCancellationExecutionContext(
 				executionContext,
-				FCancellationToken.None
+				FCancellationToken.Dummy
 			);
 
-			await FSqlProvider.statement("BEGIN TRANSACTION").execute(executionContext);
+			await FSqlConnection.statement("BEGIN TRANSACTION").execute(executionContext);
 			try {
 				let result: T;
-				const workerResult = worker(FSqlProvider);
+				const workerResult = worker(FSqlConnection);
 				if (workerResult instanceof Promise) {
 					result = await workerResult;
 				} else {
 					result = workerResult;
 				}
 				// We have not to cancel this operation, so pass uncancellableExecutionContext
-				await FSqlProvider.statement("COMMIT TRANSACTION").execute(uncancellableExecutionContext);
+				await FSqlConnection.statement("COMMIT TRANSACTION").execute(uncancellableExecutionContext);
 				return result;
 			} catch (e) {
 				try {
 					// We have not to cancel this operation, so pass uncancellableExecutionContext
-					await FSqlProvider.statement("ROLLBACK TRANSACTION").execute(uncancellableExecutionContext);
+					await FSqlConnection.statement("ROLLBACK TRANSACTION").execute(uncancellableExecutionContext);
 				} catch (e2) {
 					throw new FExceptionAggregate([
 						FException.wrapIfNeeded(e),
@@ -402,16 +404,16 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 
 
 	protected onInit(): void {
-		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(this.initExecutionContext).logger;
+		const logger: FLogger = this._log;
 		if (logger.isTraceEnabled) {
-			logger.trace(`Initializing instance of ${this.constructor.name} ...`);
+			logger.trace(this.initExecutionContext, `Initializing instance of ${this.constructor.name} ...`);
 		}
 	}
 
 	protected async onDispose(): Promise<void> {
-		const logger: FLoggerLegacy = FExecutionContextLoggerLegacy.of(this.initExecutionContext).logger;
+		const logger: FLogger = this._log;
 		if (logger.isTraceEnabled) {
-			logger.trace(`Disposing instance of ${this.constructor.name} ...`);
+			logger.trace(this.initExecutionContext, `Disposing instance of ${this.constructor.name} ...`);
 		}
 		// Dispose never raise error
 		try {
@@ -419,21 +421,21 @@ export class FSqlProviderFactoryPostgres extends FInitableBase implements FSqlPr
 		} catch (e) {
 			const ex: FException = FException.wrapIfNeeded(e);
 			if (logger.isWarnEnabled) {
-				logger.warn("Module 'pg' ends pool with error. " + ex.message);
+				logger.warn(this.initExecutionContext, "Module 'pg' ends pool with error. " + ex.message);
 			} else {
 				console.error("Module 'pg' ends pool with error", e);
 			}
-			logger.debug("Module 'pg' ends pool with error", ex);
+			logger.debug(this.initExecutionContext, "Module 'pg' ends pool with error", ex);
 		}
 	}
 }
 
-export namespace FSqlProviderFactoryPostgres {
+export namespace FSqlConnectionFactoryPostgres {
 	export interface Opts {
 		readonly url: URL;
 		/**
 		 * Default schema. The value overrides an URL param "schema".
-		 * @description Each pgClient will execute SQL statement: `SET search_path TO ${defaultSchema}` before wrapping in `FSqlProviderPostgres`
+		 * @description Each pgClient will execute SQL statement: `SET search_path TO ${defaultSchema}` before wrapping in `FSqlConnectionPostgres`
 		 * @default "public"
 		 */
 		readonly defaultSchema?: string;
@@ -442,7 +444,7 @@ export namespace FSqlProviderFactoryPostgres {
 		 * The value overrides an URL param "app"
 		 */
 		readonly applicationName?: string;
-		readonly constructorLogger?: FLoggerLegacy;
+		readonly log?: FLogger;
 		/**
 		 * @default 5000
 		 */
@@ -472,16 +474,16 @@ export namespace FSqlProviderFactoryPostgres {
 	}
 }
 
-class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
+class FSqlConnectionPostgres extends FDisposableBase implements FSqlConnection {
 	public readonly pgClient: pg.PoolClient;
-	public readonly log: FLoggerLegacy;
+	public readonly log: FLogger;
 	private readonly _disposer: () => Promise<void>;
-	public constructor(pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLoggerLegacy) {
+	public constructor(pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLogger) {
 		super();
 		this.pgClient = pgClient;
 		this._disposer = disposer;
 		this.log = log;
-		this.log.trace("FSqlProviderPostgres constructed");
+		this.log.trace({}, "FSqlConnectionPostgres constructed");
 	}
 
 	public statement(sqlText: string): FSqlStatementPostgres {
@@ -489,7 +491,7 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 		if (!sqlText) { throw new FExceptionArgument("sql"); }
 		if (this.log.isTraceEnabled) {
 			const trimmedSqlText: string = helpers.trimSqlTextForException(sqlText);
-			this.log.trace("FSqlProviderPostgres Statement: " + trimmedSqlText);
+			this.log.trace({}, "FSqlConnectionPostgres Statement: " + trimmedSqlText);
 		}
 		return new FSqlStatementPostgres(this, sqlText);
 	}
@@ -497,26 +499,23 @@ class FSqlProviderPostgres extends FDisposableBase implements FSqlProvider {
 	public async createTempTable(
 		executionContext: FExecutionContext, tableName: string, columnsDefinitions: string
 	): Promise<FSqlTemporaryTable> {
-		const myExecutionContext: FExecutionContext = new FExecutionContextLoggerLegacy(executionContext, this.log);
-		const log: FLoggerLegacy = FExecutionContextLoggerLegacy.of(myExecutionContext).logger;
-
 		const tempTable = new FSqlTemporaryTablePostgres(this, executionContext, tableName, columnsDefinitions);
-		await tempTable.init(myExecutionContext);
+		await tempTable.init(executionContext);
 		return tempTable;
 	}
 
 	protected async onDispose(): Promise<void> {
-		this.log.trace("FSqlProviderPostgres disposing...");
+		this.log.trace({}, "FSqlConnectionPostgres disposing...");
 		await this._disposer();
-		this.log.trace("FSqlProviderPostgres disposed");
+		this.log.trace({}, "FSqlConnectionPostgres disposed");
 	}
 }
 
 class FSqlStatementPostgres implements FSqlStatement {
 	private readonly _sqlText: string;
-	private readonly _owner: FSqlProviderPostgres;
+	private readonly _owner: FSqlConnectionPostgres;
 
-	public constructor(owner: FSqlProviderPostgres, sqlText: string) {
+	public constructor(owner: FSqlConnectionPostgres, sqlText: string) {
 		this._owner = owner;
 		this._sqlText = sqlText;
 	}
@@ -558,7 +557,7 @@ class FSqlStatementPostgres implements FSqlStatement {
 	public async executeQueryMultiSets(
 		executionContext: FExecutionContext, ...values: Array<FSqlStatementParam>
 	): Promise<Array<Array<FSqlResultRecord>>> {
-		const cancellationToken: FCancellationToken = FExecutionContextCancellation.of(executionContext).cancellationToken;
+		const cancellationToken: FCancellationToken = FCancellationExecutionContext.of(executionContext).cancellationToken;
 		// Executing: BEGIN
 		await helpers.executeRunQuery(executionContext, this._owner.pgClient, "BEGIN TRANSACTION", []);
 		try {
@@ -786,12 +785,12 @@ class FSqlResultRecordPostgres implements FSqlResultRecord {
 
 class FSqlTemporaryTablePostgres extends FInitableBase implements FSqlTemporaryTable {
 
-	private readonly _owner: FSqlProviderPostgres;
+	private readonly _owner: FSqlConnectionPostgres;
 	private readonly _executionContext: FExecutionContext;
 	private readonly _tableName: string;
 	private readonly _columnsDefinitions: string;
 
-	public constructor(owner: FSqlProviderPostgres, executionContext: FExecutionContext, tableName: string, columnsDefinitions: string) {
+	public constructor(owner: FSqlConnectionPostgres, executionContext: FExecutionContext, tableName: string, columnsDefinitions: string) {
 		super();
 		this._owner = owner;
 		this._executionContext = executionContext;
@@ -817,7 +816,7 @@ class FSqlTemporaryTablePostgres extends FInitableBase implements FSqlTemporaryT
 			await this._owner.statement(`DROP TABLE ${this._tableName}`).execute(this._executionContext);
 		} catch (e) {
 			// dispose never raise error
-			if (e instanceof FExceptionCancelled) {
+			if (e instanceof FCancellationException) {
 				return; // skip error message if task was cancelled
 			}
 			// Dispose never raise errors
@@ -837,13 +836,13 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asBoolean"));
 		}
 	}
-	public get asNullableBoolean(): boolean | null {
+	public get asBooleanNullable(): boolean | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (typeof this._postgresValue === "boolean") {
 			return this._postgresValue;
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableBoolean"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asBooleanNullable"));
 		}
 	}
 	public get asString(): string {
@@ -855,13 +854,13 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asString"));
 		}
 	}
-	public get asNullableString(): string | null {
+	public get asStringNullable(): string | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (_.isString(this._postgresValue)) {
 			return this._postgresValue;
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableString"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asStringNullable"));
 		}
 	}
 	public get asInteger(): number {
@@ -873,13 +872,13 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asInteger"));
 		}
 	}
-	public get asNullableInteger(): number | null {
+	public get asIntegerNullable(): number | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (_.isNumber(this._postgresValue) && Number.isInteger(this._postgresValue)) {
 			return this._postgresValue;
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableInteger"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asIntegerNullable"));
 		}
 	}
 	public get asNumber(): number {
@@ -893,7 +892,7 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNumber"));
 		}
 	}
-	public get asNullableNumber(): number | null {
+	public get asNumberNullable(): number | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (_.isNumber(this._postgresValue)) {
@@ -901,7 +900,7 @@ class FSqlDataPostgres implements FSqlData {
 		} else if (this._fi.dataTypeID === PostgresObjectID.numeric && _.isString(this._postgresValue)) {
 			return Number.parseFloat(this._postgresValue);
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableNumber"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNumberNullable"));
 		}
 	}
 	public get asDecimal(): FDecimal {
@@ -915,7 +914,7 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asDecimal"));
 		}
 	}
-	public get asNullableDecimal(): FDecimal | null {
+	public get asDecimalNullable(): FDecimal | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (_.isNumber(this._postgresValue)) {
@@ -923,7 +922,7 @@ class FSqlDataPostgres implements FSqlData {
 		} else if (_.isString(this._postgresValue)) {
 			return FDecimal.parse(this._postgresValue);
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableDecimal"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asDecimalNullable"));
 		}
 	}
 	public get asDate(): Date {
@@ -942,7 +941,7 @@ class FSqlDataPostgres implements FSqlData {
 			));
 		}
 	}
-	public get asNullableDate(): Date | null {
+	public get asDateNullable(): Date | null {
 		if (this._postgresValue === null) {
 			return null;
 			// } else if (this._fi.dataTypeID === PostgresObjectID.timestamp && this._postgresValue instanceof Date) {
@@ -953,7 +952,7 @@ class FSqlDataPostgres implements FSqlData {
 			return new Date(`${this._postgresValue}+0000`);
 		} else {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage(
-				"asNullableDate",
+				"asDateNullable",
 				`Right now the library supports TIMESTAMP WITHOUT TIME ZONE OID=${PostgresObjectID.timestamp} only. Got OID=${this._fi.dataTypeID}.`
 			));
 		}
@@ -967,13 +966,13 @@ class FSqlDataPostgres implements FSqlData {
 			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asBinary"));
 		}
 	}
-	public get asNullableBinary(): Uint8Array | null {
+	public get asBinaryNullable(): Uint8Array | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (this._postgresValue instanceof Uint8Array) {
 			return this._postgresValue;
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableBinary"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asBinaryNullable"));
 		}
 	}
 	public get asObject(): any {
@@ -988,13 +987,13 @@ class FSqlDataPostgres implements FSqlData {
 			));
 		}
 	}
-	public get asNullableObject(): any | null {
+	public get asObjectNullable(): any | null {
 		if (this._postgresValue === null) {
 			return null;
 		} else if (this._fi.dataTypeID === PostgresObjectID.jsonb) {
 			return this._postgresValue;
 		} else {
-			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asNullableObject"));
+			throw new FExceptionInvalidOperation(this.formatWrongDataTypeMessage("asObjectNullable"));
 		}
 	}
 

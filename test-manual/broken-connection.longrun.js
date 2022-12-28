@@ -39,7 +39,7 @@ function getOpts() {
     }
 }
 (async function main() {
-    await (0, common_1.Fusing)(common_1.FExecutionContext.Empty, () => new src_1.FSqlProviderFactoryPostgres(getOpts()), async (cancellationToken, FSqlProviderFactory) => {
+    await (0, common_1.Fusing)(common_1.FExecutionContext.Empty, () => new src_1.FSqlConnectionFactoryPostgres(getOpts()), async (cancellationToken, FSqlProviderFactory) => {
         await FSqlProviderFactory.usingProvider(cancellationToken, async (FSqlProvider) => {
             return (await FSqlProvider.statement("SELECT 1").executeScalar(cancellationToken)).asInteger;
         });

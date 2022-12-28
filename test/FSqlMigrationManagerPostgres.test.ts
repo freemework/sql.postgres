@@ -1,12 +1,14 @@
-import { FDecimal, FExecutionContext, FLoggerLegacy } from "@freemework/common";
+import { FDecimal, FExecutionContext, FLogger } from "@freemework/common";
 import { FDecimalBackendBigNumber } from "@freemework/decimal.bignumberjs";
-import { FMigrationSources } from "@freemework/sql.misc.migration";
+import { FSqlMigrationSources } from "@freemework/sql.misc.migration";
 
 import { assert } from "chai";
 import { PendingSuiteFunction, Suite, SuiteFunction } from "mocha";
 import * as path from "path";
 
-import { FMigrationManagerPostgres, FSqlProviderFactoryPostgres } from "../src";
+import { } from "../src";
+import { FSqlConnectionFactoryPostgres } from "../src/FSqlConnectionFactoryPostgres";
+import { FSqlMigrationManagerPostgres } from "../src/FSqlMigrationManagerPostgres";
 
 const { myDescribe, TEST_DB_URL } = (function (): {
 	myDescribe: PendingSuiteFunction | SuiteFunction;
@@ -48,37 +50,37 @@ const { myDescribe, TEST_DB_URL } = (function (): {
 
 const timestamp = Date.now();
 
-myDescribe(`MigrationManager (schema:migration_${timestamp})`, function (this: Suite) {
+myDescribe(`FSqlMigrationManagerPostgres (schema:migration_${timestamp})`, function (this: Suite) {
 
 	before(() => {
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 	});
-	after(()=>{
+	after(() => {
 		(FDecimal as any)._cfg = null
 	});
 
 
 	it("Migrate to latest version (omit targetVersion)", async () => {
-		const constructorLogger = FLoggerLegacy.None.getLogger(this.title);
+		const constructorLogger = FLogger.create(this.title);
 
-		const sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, constructorLogger
+		const sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
+			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, log: constructorLogger
 		});
-		await sqlProviderFactory.init(FExecutionContext.None);
+		await sqlConnectionFactory.init(FExecutionContext.Default);
 		try {
-			const migrationSources: FMigrationSources = await FMigrationSources.loadFromFilesystem(
-				FExecutionContext.None,
+			const migrationSources: FSqlMigrationSources = await FSqlMigrationSources.loadFromFilesystem(
+				FExecutionContext.Default,
 				path.normalize(path.join(__dirname, "..", "test.files", "MigrationManager_1"))
 			);
 
-			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory
+			const manager = new FSqlMigrationManagerPostgres({
+				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.None);
+			await manager.install(FExecutionContext.Default);
 
 		} finally {
-			await sqlProviderFactory.dispose();
+			await sqlConnectionFactory.dispose();
 		}
 	});
 });

@@ -6,20 +6,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: zxteamorg/devel.postgres-13:20210703
-        # options: >-
-        #   --health-cmd pg_isready
-        #   --health-interval 10s
-        #   --health-timeout 5s
-        #   --health-retries 5
-        ports:
-          - 5432:5432
-    env:
-      TEST_DB_URL: postgres://devadmin@localhost:5432/devdb
-
     strategy:
       matrix:
         node-version: [12.x, 14.x, 15.x, 16.x, 18.x]

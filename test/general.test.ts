@@ -2,21 +2,21 @@ import {
 	FDecimal,
 	FExceptionInvalidOperation,
 	FExecutionContext,
-	FLoggerLegacy,
+	FLogger,
 	FSqlException,
 	FSqlExceptionConstraint,
 	FSqlExceptionSyntax,
-	FSqlProvider,
+	FSqlConnection,
 	FSqlResultRecord,
 } from "@freemework/common";
 import { FDecimalBackendBigNumber } from "@freemework/decimal.bignumberjs";
-import { FMigrationSources } from "@freemework/sql.misc.migration";
+import { FSqlMigrationSources } from "@freemework/sql.misc.migration";
 
 import * as chai from "chai";
 import { PendingSuiteFunction, Suite, SuiteFunction } from "mocha";
 import * as path from "path";
 
-import { FMigrationManagerPostgres, FSqlProviderFactoryPostgres } from "../src";
+import { FSqlMigrationManagerPostgres, FSqlConnectionFactoryPostgres } from "../src";
 
 declare global {
 	namespace Chai {
@@ -87,53 +87,53 @@ const { myDescribe, TEST_DB_URL } = (function (): {
 const timestamp = Date.now();
 
 myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () {
-	let sqlProviderFactory: FSqlProviderFactoryPostgres;
-	let sqlProvider: FSqlProvider | null = null;
+	let sqlConnectionFactory: FSqlConnectionFactoryPostgres;
+	let sqlProvider: FSqlConnection | null = null;
 
-	function getFSqlProvider(): FSqlProvider {
+	function getFSqlProvider(): FSqlConnection {
 		if (!sqlProvider) { throw new Error(); }
 		return sqlProvider;
 	}
 
 
 	before(async function () {
-		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_1_${timestamp}`);
+		const constructorLogger: FLogger = FLogger.create(`general_test_1_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(22, FDecimal.RoundMode.Ceil));
 
-		sqlProviderFactory = new FSqlProviderFactoryPostgres({
+		sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
 			url: new URL(TEST_DB_URL!),
 			defaultSchema: `general_test_1_${timestamp}`,
-			constructorLogger
+			log: constructorLogger
 		});
-		await sqlProviderFactory.init(FExecutionContext.None);
+		await sqlConnectionFactory.init(FExecutionContext.Default);
 		try {
-			const migrationSources: FMigrationSources = await FMigrationSources.loadFromFilesystem(
-				FExecutionContext.None,
+			const migrationSources: FSqlMigrationSources = await FSqlMigrationSources.loadFromFilesystem(
+				FExecutionContext.Default,
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory
+			const manager = new FSqlMigrationManagerPostgres({
+				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.None);
+			await manager.install(FExecutionContext.Default);
 
 		} catch (e) {
-			await sqlProviderFactory.dispose();
+			await sqlConnectionFactory.dispose();
 			throw e;
 		}
 	});
 	after(async function () {
-		if (sqlProviderFactory) {
-			await sqlProviderFactory.dispose();
+		if (sqlConnectionFactory) {
+			await sqlConnectionFactory.dispose();
 		}
 		(FDecimal as any)._cfg = null
 	});
 
 	beforeEach(async function () {
 		// runs before each test in this block
-		sqlProvider = await sqlProviderFactory.create(FExecutionContext.None);
+		sqlProvider = await sqlConnectionFactory.create(FExecutionContext.Default);
 	});
 	afterEach(async function () {
 		// runs after each test in this block
@@ -149,7 +149,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			const result = await getFSqlProvider()
 				.statement("SELECT * FROM sp_multi_fetch_ints()")
-				.executeScalar(FExecutionContext.None);
+				.executeScalar(FExecutionContext.Default);
 		} catch (err) {
 			expectedError = err;
 		}
@@ -161,49 +161,49 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read TRUE as boolean through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT TRUE AS c0, FALSE AS c1 UNION ALL SELECT FALSE, FALSE")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, true);
 	});
 	it("Read True as boolean through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT True AS c0, 0 AS c1 UNION ALL SELECT False, 0")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, true);
 	});
 	it("Read True as boolean through executeScalar (Stored Procedure)", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT * FROM sp_contains('one')")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, true);
 	});
 	it("Read False as boolean through executeScalar (Stored Procedure)", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT * FROM sp_contains('none')")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, false);
 	});
 	it("Read FALSE as boolean through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT FALSE AS c0, TRUE AS c1 UNION ALL SELECT TRUE, TRUE")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, false);
 	});
 	it("Read False as boolean through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT False AS c0, 1 AS c1 UNION ALL SELECT True, 1")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asBoolean, false);
 	});
 	it("Read NULL as nullable boolean through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT NULL AS c0, 1 AS c1 UNION ALL SELECT 1, 1")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
-		assert.equal(result.asNullableBoolean, null);
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
+		assert.equal(result.asBooleanNullable, null);
 	});
 	it("Read financial through executeSingle", async function () {
 		const result = await getFSqlProvider()
 			.statement('SELECT "varchar","int","decimal" FROM tb_financial WHERE "id" = 1')
-			.executeSingle(FExecutionContext.None);
+			.executeSingle(FExecutionContext.Default);
 		assert.equal(result.get("varchar").asString, "42.42");
 		assert.equal(result.get("int").asInteger, 42);
 		const float = result.get("decimal").asNumber;
@@ -220,108 +220,108 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read true from JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 1")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asString, "test");
 	});
 	it("Read true from JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 2")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asInteger, 42);
 	});
 	it("Read true from JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 3")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asBoolean, true);
 	});
 	it("Read false from JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 4")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asBoolean, false);
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 1")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asObject, "test");
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 2")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asObject, 42);
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 3")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asObject, true);
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 4")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.equal(result.asObject, false);
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 5")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.deepEqual(result.asObject, [1, 2, 3]);
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 6")
-			.executeScalar(FExecutionContext.None);
+			.executeScalar(FExecutionContext.Default);
 		assert.deepEqual(result.asObject, { "a": 42 });
 	});
 	it("Read JSONB through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT data FROM tb_jsonb_test WHERE id = 7")
-			.executeScalar(FExecutionContext.None);
-		assert.deepEqual(result.asNullableObject, null);
+			.executeScalar(FExecutionContext.Default);
+		assert.deepEqual(result.asObjectNullable, null);
 	});
 
 
 	it("Read \"Hello, world!!!\" as string through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT 'Hello, world!!!' AS c0, 'stub12' AS c1 UNION ALL SELECT 'stub21', 'stub22'")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asString, "Hello, world!!!");
 	});
 	it("Read NULL as nullable string through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT NULL AS c0, 'stub12' AS c1 UNION ALL SELECT 'stub21', 'stub22'")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
-		assert.equal(result.asNullableString, null);
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
+		assert.equal(result.asStringNullable, null);
 	});
 
 	it("Read 11 as number through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT 11 AS c0, 12 AS c1 UNION SELECT 21, 22")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equal(result.asNumber, 11);
 	});
 	it("Read NULL as nullable number through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT NULL AS c0, 12 AS c1 UNION ALL SELECT 21, 22")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
-		assert.equal(result.asNullableNumber, null);
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
+		assert.equal(result.asNumberNullable, null);
 	});
 
 	it("Read 11.42 as FinancialLike through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT 11.42 AS c0, 12 AS c1 UNION SELECT 21, 22")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		const v = result.asDecimal;
 		assert.equal(v.toString(), "11.42");
 	});
 	it("Read '11.42' as FinancialLike through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT '11.42' AS c0, '12' AS c1 UNION SELECT '21', '22'")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		const v = result.asDecimal;
 		assert.equal(v.toString(), "11.42");
 	});
@@ -330,7 +330,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const result = await getFSqlProvider()
 			.statement(
 				"SELECT '2018-05-01 12:01:02.345'::TIMESTAMP AS c0, now() AT TIME ZONE 'utc' AS c1 UNION ALL SELECT now() AT TIME ZONE 'utc', now() AT TIME ZONE 'utc'")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equalDate(result.asDate, new Date(2018, 4/*May month = 4*/, 1, 12, 1, 2, 345));
 	});
 	it("Read NULL as nullable Date through executeScalar", async function () {
@@ -338,27 +338,27 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 			.statement(
 				"SELECT NULL AS c0, "
 				+ " now() AT TIME ZONE 'utc' AS c1 UNION ALL SELECT now() AT TIME ZONE 'utc', now() AT TIME ZONE 'utc'")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
-		assert.equal(result.asNullableDate, null);
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
+		assert.equal(result.asDateNullable, null);
 	});
 
 	it("Read 0007FFF as Uint8Array through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT '\\0007FFF'::bytea AS c0, '\\000'::bytea AS c1 UNION ALL SELECT '\\000'::bytea, '\\000'::bytea")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 		assert.equalBytes(result.asBinary, new Uint8Array([0, 55, 70, 70, 70]));
 	});
 	it("Read NULL as Uint8Array through executeScalar", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT NULL AS c0, '\\000'::bytea AS c1 UNION ALL SELECT '\\000'::bytea, '\\000'::bytea")
-			.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
-		assert.equal(result.asNullableBinary, null);
+			.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
+		assert.equal(result.asBinaryNullable, null);
 	});
 
 	it("Read booleans through executeQuery", async function () {
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT True AS c0, False AS c1 UNION ALL SELECT False, False UNION ALL SELECT True, False")
-			.executeQuery(FExecutionContext.None);
+			.executeQuery(FExecutionContext.Default);
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 3);
 		assert.equal(resultArray[0].get("c0").asBoolean, true);
@@ -372,7 +372,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT 'one' AS c0, 'two' AS c1 UNION ALL SELECT 'three'" +
 				", 'four' UNION ALL SELECT 'five', 'six'")
-			.executeQuery(FExecutionContext.None);
+			.executeQuery(FExecutionContext.Default);
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 3);
 		assert.equal(resultArray[0].get("c0").asString, "one");
@@ -385,7 +385,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read strings through executeQuery (Stored Proc)", async function () {
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT * FROM sp_single_fetch()")
-			.executeQuery(FExecutionContext.None);
+			.executeQuery(FExecutionContext.Default);
 
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 3);
@@ -399,7 +399,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("SELECT * FROM sp_multi_fetch()")
-				.executeQuery(FExecutionContext.None);
+				.executeQuery(FExecutionContext.Default);
 		} catch (err) {
 			expectedError = err;
 		}
@@ -411,7 +411,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read empty result through executeQuery (SELECT)", async function () {
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT * FROM \"tb_1\" WHERE 1=2")
-			.executeQuery(FExecutionContext.None);
+			.executeQuery(FExecutionContext.Default);
 
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 0);
@@ -419,7 +419,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read empty result through executeQuery (Stored Proc)", async function () {
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT * FROM sp_empty_fetch()")
-			.executeQuery(FExecutionContext.None);
+			.executeQuery(FExecutionContext.Default);
 
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 0);
@@ -427,7 +427,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Call non-existing stored procedure", async function () {
 		let expectedError: any;
 		try {
-			await getFSqlProvider().statement("SELECT * FROM sp_non_existent()").executeQuery(FExecutionContext.None);
+			await getFSqlProvider().statement("SELECT * FROM sp_non_existent()").executeQuery(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -439,15 +439,15 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 	it("Should be able to create temporary table", async function () {
 		const tempTable = await getFSqlProvider().createTempTable(
-			FExecutionContext.None,
+			FExecutionContext.Default,
 			"tb_1", // Should override(hide) existing table
 			"id SERIAL, title VARCHAR(32) NOT NULL, value SMALLINT NOT NULL, PRIMARY KEY (id)"
 		);
 		try {
-			await getFSqlProvider().statement("INSERT INTO tb_1(title, value) VALUES('test title 1', $1)").execute(FExecutionContext.None, 1);
-			await getFSqlProvider().statement("INSERT INTO tb_1(title, value) VALUES('test title 2', $1)").execute(FExecutionContext.None, 2);
+			await getFSqlProvider().statement("INSERT INTO tb_1(title, value) VALUES('test title 1', $1)").execute(FExecutionContext.Default, 1);
+			await getFSqlProvider().statement("INSERT INTO tb_1(title, value) VALUES('test title 2', $1)").execute(FExecutionContext.Default, 2);
 
-			const resultArray = await getFSqlProvider().statement("SELECT title, value FROM tb_1").executeQuery(FExecutionContext.None);
+			const resultArray = await getFSqlProvider().statement("SELECT title, value FROM tb_1").executeQuery(FExecutionContext.Default);
 
 			assert.instanceOf(resultArray, Array);
 			assert.equal(resultArray.length, 2);
@@ -460,7 +460,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		}
 
 		// tslint:disable-next-line:max-line-length
-		const resultArrayAfterDestoroyTempTable = await getFSqlProvider().statement("SELECT * FROM tb_1").executeQuery(FExecutionContext.None);
+		const resultArrayAfterDestoroyTempTable = await getFSqlProvider().statement("SELECT * FROM tb_1").executeQuery(FExecutionContext.Default);
 
 		assert.instanceOf(resultArrayAfterDestoroyTempTable, Array);
 		assert.equal(resultArrayAfterDestoroyTempTable.length, 3);
@@ -471,27 +471,27 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Should be able to pass null into executeScalar args", async function () {
 		const result1 = await getFSqlProvider()
 			.statement("SELECT 1 WHERE $1::int IS NULL")
-			.executeScalar(FExecutionContext.None, null);
+			.executeScalar(FExecutionContext.Default, null);
 		assert.equal(result1.asInteger, 1);
 	});
 
 	it("Should be able to pass null into executeQuery args", async function () {
 		const result2 = await getFSqlProvider()
 			.statement("SELECT 1 WHERE $1::int IS null;")
-			.executeQuery(FExecutionContext.None, 0);
+			.executeQuery(FExecutionContext.Default, 0);
 		assert.equal(result2.length, 0);
 	});
 	it("Should be able to pass FDecimal into query args", async function () {
 		const result1 = await getFSqlProvider()
 			.statement("SELECT $1")
-			.executeScalar(FExecutionContext.None, FDecimal.parse("42.123"));
+			.executeScalar(FExecutionContext.Default, FDecimal.parse("42.123"));
 		assert.equal(result1.asString, "42.123");
 	});
 
 	it("Read two Result Sets via sp_multi_fetch", async function () {
 		const resultSets = await getFSqlProvider()
 			.statement("SELECT * FROM sp_multi_fetch()")
-			.executeQueryMultiSets(FExecutionContext.None);
+			.executeQueryMultiSets(FExecutionContext.Default);
 		assert.isArray(resultSets);
 		assert.equal(resultSets.length, 2, "The procedure 'sp_multi_fetch' should return two result sets");
 
@@ -520,7 +520,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Read result through executeQuery (SELECT) WHERE IN many", async function () {
 		const resultArray = await getFSqlProvider()
 			.statement("SELECT * FROM \"tb_1\" WHERE int = ANY ($1)")
-			.executeQuery(FExecutionContext.None, [1, 2, 3]);
+			.executeQuery(FExecutionContext.Default, [1, 2, 3]);
 
 		assert.instanceOf(resultArray, Array);
 		assert.equal(resultArray.length, 3);
@@ -529,7 +529,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Should be able to read TIMESTAMP WITHOUT TIME ZONE", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT ts FROM tb_dates_test WHERE id = 1")
-			.executeSingle(FExecutionContext.None);
+			.executeSingle(FExecutionContext.Default);
 		const ts: Date = result.get("ts").asDate;
 		assert.equal(ts.getTime(), 1466622000410); // 1466622000410 --> "2016-06-22T19:00:00.410Z"
 		assert.equal(ts.toISOString(), "2016-06-22T19:00:00.410Z");
@@ -539,7 +539,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchRightDate: Date = new Date("2016-06-22T19:00:00.411Z");
 		const result = await getFSqlProvider()
 			.statement("SELECT ts FROM tb_dates_test WHERE ts > to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE AND ts < to_timestamp($2::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE")
-			.executeSingle(FExecutionContext.None, searchLeftDate.getTime(), searchRightDate.getTime());
+			.executeSingle(FExecutionContext.Default, searchLeftDate.getTime(), searchRightDate.getTime());
 		const ts: Date = result.get("ts").asDate;
 		assert.equal(ts.getTime(), 1466622000410); // 1466622000410 --> "2016-06-22T19:00:00.410Z"
 		assert.equal(ts.toISOString(), "2016-06-22T19:00:00.410Z");
@@ -549,7 +549,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchRightDate: Date = new Date("2016-06-22T19:00:00.411Z");
 		const result = await getFSqlProvider()
 			.statement("SELECT ts FROM tb_dates_test WHERE ts > to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE AND ts < to_timestamp($2::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE")
-			.executeSingle(FExecutionContext.None, ...[searchLeftDate.getTime(), searchRightDate.getTime()]);
+			.executeSingle(FExecutionContext.Default, ...[searchLeftDate.getTime(), searchRightDate.getTime()]);
 		const ts: Date = result.get("ts").asDate;
 		assert.equal(ts.getTime(), 1466622000410); // 1466622000410 --> "2016-06-22T19:00:00.410Z"
 		assert.equal(ts.toISOString(), "2016-06-22T19:00:00.410Z");
@@ -559,7 +559,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchRightDate: Date = new Date("2016-06-22T19:00:00.411Z");
 		const result = await getFSqlProvider()
 			.statement("SELECT ts FROM tb_dates_test WHERE ts BETWEEN to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE AND to_timestamp($2::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE")
-			.executeSingle(FExecutionContext.None, searchLeftDate.getTime(), searchRightDate.getTime());
+			.executeSingle(FExecutionContext.Default, searchLeftDate.getTime(), searchRightDate.getTime());
 		const ts: Date = result.get("ts").asDate;
 		assert.equal(ts.getTime(), 1466622000410); // 1466622000410 --> "2016-06-22T19:00:00.410Z"
 		assert.equal(ts.toISOString(), "2016-06-22T19:00:00.410Z");
@@ -567,7 +567,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Should raise exception when read TIMESTAMP WITH TIME ZONE", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT tstz FROM tb_dates_test WHERE id = 1")
-			.executeSingle(FExecutionContext.None);
+			.executeSingle(FExecutionContext.Default);
 		let expectedError: any;
 		try {
 			const stub = result.get("tstz").asDate;
@@ -583,11 +583,11 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 		const insertId = await getFSqlProvider()
 			.statement("INSERT INTO tb_dates_test(ts) VALUES(to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE) RETURNING id")
-			.executeScalar(FExecutionContext.None, testDate.getTime());
+			.executeScalar(FExecutionContext.Default, testDate.getTime());
 
 		const result = await getFSqlProvider()
 			.statement("SELECT ts FROM tb_dates_test WHERE id = $1")
-			.executeSingle(FExecutionContext.None, insertId.asInteger);
+			.executeSingle(FExecutionContext.Default, insertId.asInteger);
 
 		const ts: Date = result.get("ts").asDate;
 		assert.equal(ts.toISOString(), testDate.toISOString());
@@ -595,7 +595,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 	it("Should be able to read 2021-03-28T01:02:25.898542Z", async function () {
 		const result = await getFSqlProvider()
 			.statement("SELECT acivated_at FROM tb_dates_test2 WHERE id = 1")
-			.executeSingle(FExecutionContext.None);
+			.executeSingle(FExecutionContext.Default);
 		const ts: Date = result.get("acivated_at").asDate;
 		assert.equal(ts.getTime(), 1616893345898); // 1616893345898 --> "2021-03-28T01:02:25.898Z"
 		assert.equal(ts.toISOString(), "2021-03-28T01:02:25.898Z");
@@ -604,7 +604,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchDate1: Date = new Date("2016-06-22T19:00:00.409Z");
 		const row: FSqlResultRecord = await getFSqlProvider()
 			.statement("SELECT to_timestamp($1::DOUBLE PRECISION / 1000)::TEXT AS acivated_at_text")
-			.executeSingle(FExecutionContext.None, searchDate1.getTime());
+			.executeSingle(FExecutionContext.Default, searchDate1.getTime());
 		const acivated_at_text: string = row.get("acivated_at_text").asString;
 		assert.equal(acivated_at_text, "2016-06-22 19:00:00.409+00");
 	});
@@ -612,7 +612,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchDate1: Date = new Date("2016-06-22T19:00:00.409Z");
 		const row: FSqlResultRecord = await getFSqlProvider()
 			.statement("SELECT to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE::TEXT AS acivated_at_text")
-			.executeSingle(FExecutionContext.None, searchDate1.getTime());
+			.executeSingle(FExecutionContext.Default, searchDate1.getTime());
 		const acivated_at_text: string = row.get("acivated_at_text").asString;
 		assert.equal(acivated_at_text, "2016-06-22 19:00:00.409");
 	});
@@ -620,7 +620,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchDate1: Date = new Date("2021-03-28T01:02:25.898Z");
 		const row: FSqlResultRecord = await getFSqlProvider()
 			.statement("SELECT to_timestamp($1::DOUBLE PRECISION / 1000)::TEXT AS acivated_at_text")
-			.executeSingle(FExecutionContext.None, searchDate1.getTime());
+			.executeSingle(FExecutionContext.Default, searchDate1.getTime());
 		const acivated_at_text: string = row.get("acivated_at_text").asString;
 		assert.equal(acivated_at_text, "2021-03-28 01:02:25.898+00");
 	});
@@ -628,7 +628,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		const searchDate1: Date = new Date("2021-03-28T01:02:25.898Z");
 		const row: FSqlResultRecord = await getFSqlProvider()
 			.statement("SELECT to_timestamp($1::DOUBLE PRECISION / 1000)::TIMESTAMP WITHOUT TIME ZONE::TEXT AS acivated_at_text")
-			.executeSingle(FExecutionContext.None, searchDate1.getTime());
+			.executeSingle(FExecutionContext.Default, searchDate1.getTime());
 		const acivated_at_text: string = row.get("acivated_at_text").asString;
 		assert.equal(acivated_at_text, "2021-03-28 01:02:25.898");
 	});
@@ -637,7 +637,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.execute(FExecutionContext.None);
+				.execute(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -651,7 +651,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.executeQuery(FExecutionContext.None);
+				.executeQuery(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -665,7 +665,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.executeQueryMultiSets(FExecutionContext.None);
+				.executeQueryMultiSets(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -679,7 +679,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.executeScalar(FExecutionContext.None);
+				.executeScalar(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -693,7 +693,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.executeScalarOrNull(FExecutionContext.None);
+				.executeScalarOrNull(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -707,7 +707,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("WRONG SQL COMMAND")
-				.executeSingle(FExecutionContext.None);
+				.executeSingle(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -722,7 +722,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 		try {
 			await getFSqlProvider()
 				.statement("INSERT INTO tb_1 VALUES ('one', 1)")
-				.execute(FExecutionContext.None);
+				.execute(FExecutionContext.Default);
 		} catch (e) {
 			expectedError = e;
 		}
@@ -735,47 +735,47 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 
 
 myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestamp})`, function () {
-	let sqlProviderFactory: FSqlProviderFactoryPostgres;
+	let sqlConnectionFactory: FSqlConnectionFactoryPostgres;
 
 	before(async function () {
-		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_2_${timestamp}`);
+		const constructorLogger = FLogger.create(`general_test_2_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
-		sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_2_${timestamp}`, constructorLogger
+		sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
+			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_2_${timestamp}`, log: constructorLogger
 		});
-		await sqlProviderFactory.init(FExecutionContext.None);
+		await sqlConnectionFactory.init(FExecutionContext.Default);
 		try {
-			const migrationSources: FMigrationSources = await FMigrationSources.loadFromFilesystem(
-				FExecutionContext.None,
+			const migrationSources: FSqlMigrationSources = await FSqlMigrationSources.loadFromFilesystem(
+				FExecutionContext.Default,
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory
+			const manager = new FSqlMigrationManagerPostgres({
+				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.None);
+			await manager.install(FExecutionContext.Default);
 
 		} catch (e) {
-			await sqlProviderFactory.dispose();
+			await sqlConnectionFactory.dispose();
 			throw e;
 		}
 	});
 	after(async function () {
-		if (sqlProviderFactory) {
-			await sqlProviderFactory.dispose();
+		if (sqlConnectionFactory) {
+			await sqlConnectionFactory.dispose();
 		}
 		(FDecimal as any)._cfg = null
 	});
 
 
 	it("Read TRUE as boolean through executeScalar", function () {
-		return sqlProviderFactory.usingProvider(FExecutionContext.None, async (FSqlProvider) => {
-			const result = await FSqlProvider
+		return sqlConnectionFactory.usingProvider(FExecutionContext.Default, async (sqlConnection) => {
+			const result = await sqlConnection
 				.statement("SELECT TRUE AS c0, FALSE AS c1 UNION ALL SELECT FALSE, FALSE")
-				.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+				.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 			assert.equal(result.asBoolean, true);
 		});
 	});
@@ -783,46 +783,46 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 
 
 myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_test_3_${timestamp})`, function () {
-	let sqlProviderFactory: FSqlProviderFactoryPostgres;
+	let sqlConnectionFactory: FSqlConnectionFactoryPostgres;
 
 	before(async function () {
-		const constructorLogger = FLoggerLegacy.None.getLogger(`general_test_3_${timestamp}`);
+		const constructorLogger = FLogger.create(`general_test_3_${timestamp}`);
 
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
 
-		sqlProviderFactory = new FSqlProviderFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_3_${timestamp}`, constructorLogger
+		sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
+			url: new URL(TEST_DB_URL!), defaultSchema: `general_test_3_${timestamp}`, log: constructorLogger
 		});
-		await sqlProviderFactory.init(FExecutionContext.None);
+		await sqlConnectionFactory.init(FExecutionContext.Default);
 		try {
-			const migrationSources: FMigrationSources = await FMigrationSources.loadFromFilesystem(
-				FExecutionContext.None,
+			const migrationSources: FSqlMigrationSources = await FSqlMigrationSources.loadFromFilesystem(
+				FExecutionContext.Default,
 				path.normalize(path.join(__dirname, "..", "test.files", "general"))
 			);
 
-			const manager = new FMigrationManagerPostgres({
-				migrationSources, sqlProviderFactory
+			const manager = new FSqlMigrationManagerPostgres({
+				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.None);
+			await manager.install(FExecutionContext.Default);
 
 		} catch (e) {
-			await sqlProviderFactory.dispose();
+			await sqlConnectionFactory.dispose();
 			throw e;
 		}
 	});
 	after(async function () {
-		if (sqlProviderFactory) {
-			await sqlProviderFactory.dispose();
+		if (sqlConnectionFactory) {
+			await sqlConnectionFactory.dispose();
 		}
 		(FDecimal as any)._cfg = null
 	});
 
 	it("Read TRUE as boolean through executeScalar", function () {
-		return sqlProviderFactory.usingProviderWithTransaction(FExecutionContext.None, async (FSqlProvider) => {
-			const result = await FSqlProvider
+		return sqlConnectionFactory.usingProviderWithTransaction(FExecutionContext.Default, async (FSqlConnection) => {
+			const result = await FSqlConnection
 				.statement("SELECT TRUE AS c0, FALSE AS c1 UNION ALL SELECT FALSE, FALSE")
-				.executeScalar(FExecutionContext.None); // executeScalar() should return first row + first column
+				.executeScalar(FExecutionContext.Default); // executeScalar() should return first row + first column
 			assert.equal(result.asBoolean, true);
 		});
 	});

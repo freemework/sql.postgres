@@ -12,7 +12,7 @@ CREATE TABLE "__dbVersion" (
 	"log" TEXT NOT NULL
 )
 ```
-NOTE: Name of table may be overriden via migration's opts
+NOTE: Name of table may be overridden via migration's opts
 
 ## Connection URL
 
@@ -38,7 +38,7 @@ postgres://localhost:5432/postgres
 postgres+ssl://my_pg_host:5432/postgres
 ```
 
-Note: For full SSL mode you need to pass `opts.ssl` programically. Passing certificates via URL does not supported.
+Note: For full SSL mode you need to pass `opts.ssl` programmatically. Passing certificates via URL does not supported.
 
 ## Development Notes
 
@@ -53,5 +53,5 @@ docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish
 #### Start + run tests
 
 ```bash
-docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish 5432:5432 --detach zxteamorg/devel.postgres-13:20210703; npm run test:only
+docker kill pgdevdb; docker rm pgdevdb; docker run --name pgdevdb --rm --publish 5432:5432 --detach zxteamorg/devel.postgres-13:20210703; sleep 3; npm run test:only
 ```
