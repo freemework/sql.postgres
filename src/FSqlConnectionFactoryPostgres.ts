@@ -221,7 +221,6 @@ export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSql
 		super();
 
 		this._log = opts.log !== undefined ? opts.log : FLogger.create(this.constructor.name);
-		let constructorLoggerLabels: FLoggerLabels = {};
 
 		switch (opts.url.protocol) {
 			case "postgres:":
@@ -232,7 +231,7 @@ export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSql
 				throw new FExceptionArgument("Expected URL schema 'postgres:' or 'postgres+ssl:'.", "opts.url");
 		}
 
-		this._log.trace(constructorLoggerLabels, "PostgresProviderPoolFactory constructed");
+		this._log.trace(FExecutionContext.Empty, "PostgresProviderPoolFactory constructed");
 
 		const poolConfig: pg.PoolConfig = { host: this._url.hostname };
 
@@ -275,27 +274,27 @@ export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSql
 				if (opts.ssl !== undefined) {
 					if (opts.ssl === "prefer") {
 						poolConfig.ssl.rejectUnauthorized = false;
-						this._log.debug(constructorLoggerLabels, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+						this._log.debug(FExecutionContext.Empty, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 					} else {
 						poolConfig.ssl.rejectUnauthorized = true;
-						this._log.debug(constructorLoggerLabels, "Using full secured connection (with certificate validation).");
+						this._log.debug(FExecutionContext.Empty, "Using full secured connection (with certificate validation).");
 						if (opts.ssl.caCert !== undefined) {
 							poolConfig.ssl.ca = opts.ssl.caCert;
-							this._log.debug(constructorLoggerLabels, "CA certificate was provided.");
+							this._log.debug(FExecutionContext.Empty, "CA certificate was provided.");
 						}
 						if (opts.ssl.clientCert !== undefined) {
 							poolConfig.ssl.cert = opts.ssl.clientCert.cert;
 							poolConfig.ssl.key = opts.ssl.clientCert.key;
-							this._log.debug(constructorLoggerLabels, "Client certificate was provided.");
+							this._log.debug(FExecutionContext.Empty, "Client certificate was provided.");
 						}
 					}
 				}
 			} else {
 				poolConfig.ssl.rejectUnauthorized = false;
-				this._log.debug(constructorLoggerLabels, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
+				this._log.debug(FExecutionContext.Empty, "Using partial secured connection without checking identity (SSL-prefer, no certificate validation).");
 			}
 		} else {
-			this._log.debug(constructorLoggerLabels, "Using unsecured connection (non-SSL).");
+			this._log.debug(FExecutionContext.Empty, "Using unsecured connection (non-SSL).");
 		}
 
 		this._pool = new pg.Pool(poolConfig);
@@ -312,8 +311,8 @@ export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSql
 				error handler in case you want to inspect it.
 			 */
 			const ex: FException = FException.wrapIfNeeded(e);
-			this._log.debug(constructorLoggerLabels, ex.message);
-			this._log.trace(constructorLoggerLabels, ex.message, ex);
+			this._log.debug(FExecutionContext.Empty, ex.message);
+			this._log.trace(FExecutionContext.Empty, ex.message, ex);
 		});
 	}
 
@@ -335,6 +334,7 @@ export class FSqlConnectionFactoryPostgres extends FInitableBase implements FSql
 			await pgClient.query("SET TIME ZONE '00:00'");
 
 			const FSqlConnection: FSqlConnection = new FSqlConnectionPostgres(
+				executionContext,
 				pgClient,
 				async () => {
 					// dispose callback
@@ -477,13 +477,15 @@ export namespace FSqlConnectionFactoryPostgres {
 class FSqlConnectionPostgres extends FDisposableBase implements FSqlConnection {
 	public readonly pgClient: pg.PoolClient;
 	public readonly log: FLogger;
+	private readonly _initExecutionContext: FExecutionContext;
 	private readonly _disposer: () => Promise<void>;
-	public constructor(pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLogger) {
+	public constructor(executionContext: FExecutionContext, pgClient: pg.PoolClient, disposer: () => Promise<void>, log: FLogger) {
 		super();
 		this.pgClient = pgClient;
 		this._disposer = disposer;
 		this.log = log;
-		this.log.trace({}, "FSqlConnectionPostgres constructed");
+		this._initExecutionContext = executionContext;
+		this.log.trace(this._initExecutionContext, "FSqlConnectionPostgres constructed");
 	}
 
 	public statement(sqlText: string): FSqlStatementPostgres {
@@ -491,7 +493,7 @@ class FSqlConnectionPostgres extends FDisposableBase implements FSqlConnection {
 		if (!sqlText) { throw new FExceptionArgument("sql"); }
 		if (this.log.isTraceEnabled) {
 			const trimmedSqlText: string = helpers.trimSqlTextForException(sqlText);
-			this.log.trace({}, "FSqlConnectionPostgres Statement: " + trimmedSqlText);
+			this.log.trace(this._initExecutionContext, "FSqlConnectionPostgres Statement: " + trimmedSqlText);
 		}
 		return new FSqlStatementPostgres(this, sqlText);
 	}
@@ -505,9 +507,9 @@ class FSqlConnectionPostgres extends FDisposableBase implements FSqlConnection {
 	}
 
 	protected async onDispose(): Promise<void> {
-		this.log.trace({}, "FSqlConnectionPostgres disposing...");
+		this.log.trace(this._initExecutionContext, "FSqlConnectionPostgres disposing...");
 		await this._disposer();
-		this.log.trace({}, "FSqlConnectionPostgres disposed");
+		this.log.trace(this._initExecutionContext, "FSqlConnectionPostgres disposed");
 	}
 }
 
