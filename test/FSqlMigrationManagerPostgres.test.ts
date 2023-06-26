@@ -25,7 +25,7 @@ const { myDescribe, TEST_DB_URL } = (function (): {
 		case "postgres://": {
 			const host = "localhost";
 			const port = 5432;
-			const user = "postgres";
+			const user = "devadmin";
 			testDbUrl = `postgres://${user}@${host}:${port}/devdb`;
 			return Object.freeze({ myDescribe: describe, TEST_DB_URL: testDbUrl });
 		}
