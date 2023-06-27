@@ -1,0 +1,6 @@
+CREATE TABLE "purchase"
+(
+	"id" INT GENERATED ALWAYS AS IDENTITY,
+	"date" TIMESTAMP NOT NULL,
+	PRIMARY KEY("id")
+);
