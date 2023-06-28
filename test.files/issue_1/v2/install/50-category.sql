@@ -1,0 +1,7 @@
+CREATE TABLE "category"
+
+(
+	"id" INT GENERATED ALWAYS AS IDENTITY,
+	"name" VARCHAR(128) NOT NULL,
+	PRIMARY KEY ("id")
+);
