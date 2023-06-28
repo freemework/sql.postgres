@@ -1,5 +1,5 @@
 INSERT INTO "product" ("name")
 VALUES ('SMART');
 
-INSERT INTO "purchase" ("costumer")
+INSERT INTO "purchase" ("customer")
 VALUES ('Hello');
