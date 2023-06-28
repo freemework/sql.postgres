@@ -50,7 +50,7 @@ const { myDescribe, TEST_DB_URL } = (function (): {
 
 const timestamp = Date.now();
 
-myDescribe(`FSqlMigrationManagerPostgres (schema:migration_${timestamp})`, function (this: Suite) {
+myDescribe(`Issue 2 (schema:issue_2_${timestamp})`, function (this: Suite) {
 
 	before(() => {
 		FDecimal.configure(new FDecimalBackendBigNumber(12, FDecimal.RoundMode.Trunc));
@@ -60,17 +60,17 @@ myDescribe(`FSqlMigrationManagerPostgres (schema:migration_${timestamp})`, funct
 	});
 
 
-	it("Migrate to latest version (omit targetVersion)", async () => {
+	it.only("Migrate to second version (omit targetVersion)", async () => {
 		const constructorLogger = FLogger.create(this.title);
 
 		const sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
-			url: new URL(TEST_DB_URL!), defaultSchema: `migration_${timestamp}`, log: constructorLogger
+			url: new URL(TEST_DB_URL!), defaultSchema: `issue_2_${timestamp}`, log: constructorLogger
 		});
 		await sqlConnectionFactory.init(FExecutionContext.Default);
 		try {
 			const migrationSources: FSqlMigrationSources = await FSqlMigrationSources.loadFromFilesystem(
 				FExecutionContext.Default,
-				path.normalize(path.join(__dirname, "..", "test.files", "MigrationManager_1"))
+				path.normalize(path.join(__dirname, "..", "test.files", "issue-2"))
 			);
 
 			const manager = new FSqlMigrationManagerPostgres({
@@ -78,6 +78,7 @@ myDescribe(`FSqlMigrationManagerPostgres (schema:migration_${timestamp})`, funct
 			});
 
 			await manager.install(FExecutionContext.Default);
+			await manager.rollback(FExecutionContext.Default);
 
 		} finally {
 			await sqlConnectionFactory.dispose();
