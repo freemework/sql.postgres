@@ -117,7 +117,7 @@ myDescribe(`PostgreSQL Tests (schema:general_test_1_${timestamp})`, function () 
 				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.Default);
+			await manager.install(FExecutionContext.Default, migrationSources);
 
 		} catch (e) {
 			await sqlConnectionFactory.dispose();
@@ -756,7 +756,7 @@ myDescribe(`PostgreSQL Tests via usingProvider (schema:general_test_2_${timestam
 				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.Default);
+			await manager.install(FExecutionContext.Default, migrationSources);
 
 		} catch (e) {
 			await sqlConnectionFactory.dispose();
@@ -804,7 +804,7 @@ myDescribe(`PostgreSQL Tests via usingProviderWithTransaction (schema:general_te
 				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.Default);
+			await manager.install(FExecutionContext.Default, migrationSources);
 
 		} catch (e) {
 			await sqlConnectionFactory.dispose();

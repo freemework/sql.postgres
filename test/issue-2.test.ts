@@ -60,7 +60,7 @@ myDescribe(`Issue 2 (schema:issue_2_${timestamp})`, function (this: Suite) {
 	});
 
 
-	it.only("Migrate to second version (omit targetVersion)", async () => {
+	it("Migrate to second version (omit targetVersion)", async () => {
 		const constructorLogger = FLogger.create(this.title);
 
 		const sqlConnectionFactory = new FSqlConnectionFactoryPostgres({
@@ -77,7 +77,7 @@ myDescribe(`Issue 2 (schema:issue_2_${timestamp})`, function (this: Suite) {
 				migrationSources, sqlConnectionFactory
 			});
 
-			await manager.install(FExecutionContext.Default);
+			await manager.install(FExecutionContext.Default, migrationSources);
 			await manager.rollback(FExecutionContext.Default);
 
 		} finally {
